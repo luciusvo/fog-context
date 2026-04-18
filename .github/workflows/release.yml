@@ -66,18 +66,22 @@ jobs:
         if: matrix.cross
         run: cargo install cross --git https://github.com/cross-rs/cross
 
-      # ── Clone opt-in C-FFI grammars (Kotlin / Swift / Dart) ──────────────
+      # ── Download opt-in C-FFI grammars (Kotlin / Swift / Dart) ───────────
       - name: Fetch and generate extra grammars
         shell: bash
         run: |
           mkdir -p crates/fog-mcp-server/grammars
           cd crates/fog-mcp-server/grammars
+          # Kotlin and Dart have parser.c in their github repos
           git clone --depth 1 https://github.com/fwcd/tree-sitter-kotlin.git
-          git clone --depth 1 https://github.com/alex-pinkus/tree-sitter-swift.git
           git clone --depth 1 https://github.com/nickel-lang/tree-sitter-dart.git || \
           git clone --depth 1 https://github.com/nielsenko/tree-sitter-dart.git
-          npm install -g tree-sitter-cli
-          cd tree-sitter-swift && npm install && npx tree-sitter generate
+          # Swift's github repo lacks parser.c, so we download the pre-generated npm package instead
+          # This avoids "npx tree-sitter generate" which breaks on Windows CI
+          npm pack tree-sitter-swift@0.7.1
+          tar -xf tree-sitter-swift-*.tgz
+          mv package tree-sitter-swift
+          rm tree-sitter-swift-*.tgz
 
       # ── Rust toolchain ────────────────────────────────────────────────────
       - name: Install Rust toolchain
