@@ -19,6 +19,7 @@ pub mod walker;
 use std::path::Path;
 
 use crate::protocol::ToolCallResult;
+use crate::registry::Registry;
 
 /// Indexing statistics returned by run_scan.
 #[derive(Debug, Default)]
@@ -62,6 +63,18 @@ pub fn run_scan(
 
     // Step 3: Write AGENTS.md workflow guide
     ingest::write_agents_md(project_root, scanned.len(), stats.symbols_created, elapsed);
+
+    // Step 4: Register project in global ~/.fog/registry.json
+    // This makes fog_roots aware of this project after every scan.
+    {
+        let name = project_root
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "unknown".into());
+        let path = project_root.to_string_lossy().into_owned();
+        let mut reg = Registry::load();
+        reg.upsert(name, path, stats.symbols_created as u64);
+    }
 
     // Warn about any query compile errors so agents see them immediately
     let warnings = if stats.query_errors.is_empty() {

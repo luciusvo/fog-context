@@ -62,20 +62,37 @@ impl Registry {
         })
     }
 
-    /// Register a new project. Creates .fog-id in the project root on first index.
-    pub fn register(&mut self, name: String, path: String) {
+    /// Upsert a project into the registry (create if new, update if exists).
+    /// Called automatically after every fog_scan.
+    /// Updates symbol_count and last_indexed timestamp.
+    pub fn upsert(&mut self, name: String, path: String, symbol_count: u64) {
         let fog_id = ensure_project_id(&path);
-        if !self.entries.iter().any(|e| e.path == path) {
+        let now = chrono_now();
+        if let Some(entry) = self.entries.iter_mut().find(|e| {
+            e.fog_id.as_deref() == Some(&fog_id)
+                || e.path == path
+        }) {
+            // Update existing entry
+            entry.symbol_count = Some(symbol_count);
+            entry.last_indexed = Some(now);
+            entry.fog_id = Some(fog_id);
+        } else {
+            // Create new entry
             self.entries.push(RepoEntry {
                 name,
-                path,
-                symbol_count: None,
-                last_indexed: None,
-                db_path: None,
+                path: path.clone(),
+                symbol_count: Some(symbol_count),
+                last_indexed: Some(now),
+                db_path: Some(format!("{}/.fog-context/context.db", path)),
                 fog_id: Some(fog_id),
             });
-            self.save();
         }
+        self.save();
+    }
+
+    /// Register a new project (legacy — does not update if already exists).
+    pub fn register(&mut self, name: String, path: String) {
+        self.upsert(name, path, 0);
     }
 
     fn save(&self) {
@@ -110,7 +127,6 @@ pub fn ensure_project_id(project_path: &str) -> String {
     if let Some(id) = read_project_id(project_path) {
         return id;
     }
-    // Generate a simple 8-hex random ID without external crate
     let id = {
         use std::time::{SystemTime, UNIX_EPOCH};
         let t = SystemTime::now().duration_since(UNIX_EPOCH)
@@ -119,6 +135,26 @@ pub fn ensure_project_id(project_path: &str) -> String {
     };
     let id_path = std::path::Path::new(project_path).join(".fog-id");
     let _ = std::fs::write(&id_path, &id);
-    tracing::info!("fog-context: created .fog-id = {id} at {project_path}");
     id
 }
+
+/// Simple ISO-8601-like timestamp without external crates.
+fn chrono_now() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    // Format: YYYY-MM-DDTHH:MM:SSZ (approximate, UTC)
+    let s = secs % 60;
+    let m = (secs / 60) % 60;
+    let h = (secs / 3600) % 24;
+    let days = secs / 86400;
+    // Simple date from epoch (approximate — good enough for a timestamp label)
+    let year = 1970 + days / 365;
+    let day_of_year = days % 365;
+    let month = day_of_year / 30 + 1;
+    let day = day_of_year % 30 + 1;
+    format!("{year:04}-{month:02}-{day:02}T{h:02}:{m:02}:{s:02}Z")
+}
+
