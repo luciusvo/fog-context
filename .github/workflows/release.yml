@@ -1,0 +1,135 @@
+name: Release fog-context MCP Binary
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build_release:
+    name: Build ${{ matrix.file_name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ── Linux x86_64 (static musl — works on any distro) ──────────────
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            file_name: fog-mcp-linux-amd64
+            musl: true
+
+          # ── Linux ARM64 (Raspberry Pi 5, AWS Graviton) ────────────────────
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            file_name: fog-mcp-linux-arm64
+            musl: true
+            cross: true          # use cross-rs for ARM cross-compilation
+
+          # ── macOS Apple Silicon (M1/M2/M3) ────────────────────────────────
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            file_name: fog-mcp-macos-arm64
+            musl: false
+
+          # ── macOS Intel (x86_64) ──────────────────────────────────────────
+          - os: macos-13             # last Intel macOS runner
+            target: x86_64-apple-darwin
+            file_name: fog-mcp-macos-amd64
+            musl: false
+
+          # ── Windows x86_64 ────────────────────────────────────────────────
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            file_name: fog-mcp-windows-amd64.exe
+            musl: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Node.js: needed to generate Swift grammar parser.c ────────────────
+      - name: Setup Node.js (Swift grammar generation)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # ── Linux musl toolchain ──────────────────────────────────────────────
+      - name: Install musl-tools (Linux x86_64)
+        if: matrix.musl && !matrix.cross
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      # ── ARM cross-compilation via cross-rs ───────────────────────────────
+      - name: Install cross (Linux ARM64)
+        if: matrix.cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      # ── Clone opt-in C-FFI grammars (Kotlin / Swift / Dart) ──────────────
+      - name: Fetch and generate extra grammars
+        shell: bash
+        run: |
+          mkdir -p crates/fog-mcp-server/grammars
+          cd crates/fog-mcp-server/grammars
+          git clone --depth 1 https://github.com/fwcd/tree-sitter-kotlin.git
+          git clone --depth 1 https://github.com/alex-pinkus/tree-sitter-swift.git
+          git clone --depth 1 https://github.com/nickel-lang/tree-sitter-dart.git || \
+          git clone --depth 1 https://github.com/nielsenko/tree-sitter-dart.git
+          cd tree-sitter-swift && npm install && npx tree-sitter generate
+
+      # ── Rust toolchain ────────────────────────────────────────────────────
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # ── Build (x86_64 Linux ARM uses cross-rs, others use cargo) ─────────
+      - name: Build MCP server (x86_64 / macOS / Windows)
+        if: '!matrix.cross'
+        run: cargo build --release --target ${{ matrix.target }} --package fog-mcp-server --features all-langs
+        env:
+          CARGO_PROFILE_RELEASE_LTO: "thin"
+          CARGO_PROFILE_RELEASE_STRIP: "debuginfo"
+
+      - name: Build MCP server (ARM64 via cross-rs)
+        if: matrix.cross
+        run: cross build --release --target ${{ matrix.target }} --package fog-mcp-server
+        # Note: --features all-langs excluded for cross builds (C-FFI needs native toolchain)
+
+      # ── Rename binary ─────────────────────────────────────────────────────
+      - name: Rename binary
+        shell: bash
+        run: |
+          SRC="target/${{ matrix.target }}/release/fog-mcp-server"
+          mv "${SRC}" "${{ matrix.file_name }}" 2>/dev/null || \
+          mv "${SRC}.exe" "${{ matrix.file_name }}" 2>/dev/null || true
+
+      # ── Upload to GitHub Releases ─────────────────────────────────────────
+      - name: Upload to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.file_name }}
+          name: fog-context ${{ github.ref_name }}
+          body: |
+            ## fog-context ${{ github.ref_name }}
+
+            ### Download
+
+            | Platform | File |
+            |:---------|:-----|
+            | Linux x86_64 | `fog-mcp-linux-amd64` |
+            | Linux ARM64 | `fog-mcp-linux-arm64` |
+            | macOS Apple Silicon | `fog-mcp-macos-arm64` |
+            | macOS Intel | `fog-mcp-macos-amd64` |
+            | Windows x86_64 | `fog-mcp-windows-amd64.exe` |
+
+            ### Quick Setup (Claude Desktop / Cline)
+            ```json
+            {
+              "mcpServers": {
+                "fog-context": {
+                  "command": "/path/to/fog-mcp-server",
+                  "args": ["--project", "/path/to/your/codebase"]
+                }
+              }
+            }
+            ```
+          draft: false
