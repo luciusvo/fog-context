@@ -6,7 +6,7 @@ import urllib.request
 import tempfile
 import stat
 
-VERSION = "0.5.2"
+VERSION = "0.5.1"
 REPO = "luciusvo/fog-context"
 
 def get_binary_name():
