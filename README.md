@@ -160,12 +160,7 @@ git push origin --tags   # Triggers release build
 
 ---
 
-## Legacy TypeScript Version
 
-The original TypeScript implementation (v0.4.0) is archived at `MCP/fog-context-repo/`.
-See `MCP/fog-context-repo/ARCHIVED.md` for migration notes.
-
----
 
 ## License
 
