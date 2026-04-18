@@ -26,7 +26,7 @@ pub fn definition() -> ToolDef {
     }
 }
 
-pub fn handle(_args: &Value, db: &MemoryDb) -> ToolCallResult {
+pub fn handle(_args: &Value, db: &MemoryDb, registry: &crate::registry::Registry) -> ToolCallResult {
     match db.knowledge_score() {
         Ok(score) => {
             let status = if score.total_symbols == 0 {
@@ -34,22 +34,55 @@ pub fn handle(_args: &Value, db: &MemoryDb) -> ToolCallResult {
             } else if score.layer_score >= 75 {
                 "✅ Healthy"
             } else if score.layer_score >= 40 {
-                "🟡 Partial — consider adding domains/decisions"
+                "🟡 Partial — see knowledge gaps below"
             } else {
-                "🔴 Low knowledge quality — run fog_scan + add fog_domains/fog_decisions"
+                "🔴 Low knowledge quality"
             };
 
             let mut lines = vec![
                 format!("# fog-context Status\n"),
                 format!("**State:** {status}"),
                 format!("**Knowledge Score:** {}/100", score.layer_score),
-                format!("**Symbols:** {}", score.total_symbols),
-                format!("**Domains:** {}", score.total_domains),
-                format!("**Decisions:** {}", score.total_decisions),
+                format!("**Symbols:** {} across {} files", score.total_symbols, score.total_files),
+                format!("**Edges:** {}", score.total_edges),
+                format!("**Domains (L2):** {}", score.total_domains),
+                format!("**Constraints (L3):** {}", score.total_constraints),
+                format!("**Decisions (L4):** {}", score.total_decisions),
+                format!("**Projects in registry:** {}", registry.list().len()),
             ];
 
-            if let Some(hint) = score._agent_hint {
-                lines.push(format!("\n**Hint:** {hint}"));
+            // Sprint 3D: mandatory enforcement reminder for empty layers
+            if score.total_symbols > 0 {
+                let mut gaps: Vec<String> = Vec::new();
+
+                if score.total_domains == 0 {
+                    gaps.push(
+                        "  → **Layer 2 empty** — group symbols into domains:\n\
+                         ```\n\
+                         fog_assign({ \"domain\": \"YourFeature\", \"symbols\": [\"fn_a\", \"fn_b\"] })\n\
+                         ```".to_string()
+                    );
+                }
+                if score.total_constraints == 0 {
+                    gaps.push(
+                        "  → **Layer 3 empty** — load architecture rules from ADR files:\n\
+                         ```\n\
+                         fog_constraints({})\n\
+                         ```".to_string()
+                    );
+                }
+                if score.total_decisions == 0 {
+                    gaps.push(
+                        "  → **⚠️  Layer 4 EMPTY** — no decisions recorded. MANDATORY after every change:\n\
+                         ```\n\
+                         fog_decisions({ \"functions\": [\"changed_fn\"], \"reason\": \"WHY\", \"revert_risk\": \"LOW\" })\n\
+                         ```".to_string()
+                    );
+                }
+
+                if !gaps.is_empty() {
+                    lines.push(format!("\n## 🔴 Knowledge Gaps (Action Required)\n{}", gaps.join("\n\n")));
+                }
             }
 
             ToolCallResult::ok(lines.join("\n"))
@@ -57,3 +90,4 @@ pub fn handle(_args: &Value, db: &MemoryDb) -> ToolCallResult {
         Err(e) => ToolCallResult::err(format!("fog_brief error: {e}")),
     }
 }
+

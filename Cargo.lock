@@ -203,7 +203,7 @@ checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
 
 [[package]]
 name = "fog-mcp-server"
-version = "0.5.1"
+version = "0.5.4"
 dependencies = [
  "cc",
  "chrono",
@@ -221,6 +221,7 @@ dependencies = [
  "tree-sitter",
  "tree-sitter-c",
  "tree-sitter-c-sharp",
+ "tree-sitter-cpp",
  "tree-sitter-go",
  "tree-sitter-java",
  "tree-sitter-language",
@@ -236,7 +237,7 @@ dependencies = [
 
 [[package]]
 name = "fog-memory"
-version = "0.5.1"
+version = "0.5.4"
 dependencies = [
  "fog-types",
  "rusqlite",
@@ -249,7 +250,7 @@ dependencies = [
 
 [[package]]
 name = "fog-types"
-version = "0.5.1"
+version = "0.5.4"
 dependencies = [
  "async-trait",
  "chrono",
@@ -873,6 +874,16 @@ name = "tree-sitter-c-sharp"
 version = "0.23.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1aac67f1ad71de1d6d39708d34811081c26dfa495658de6c14c34200849357c"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-cpp"
+version = "0.23.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df2196ea9d47b4ab4a31b9297eaa5a5d19a0b121dceb9f118f6790ad0ab94743"
 dependencies = [
  "cc",
  "tree-sitter-language",

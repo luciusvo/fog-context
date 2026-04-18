@@ -428,6 +428,41 @@ pub fn write_agents_md(root: &Path, files: usize, symbols: usize, elapsed_ms: u1
     } else {
         String::new()
     };
+
+    // Sprint 3D: add onboarding block when this appears to be a first-time index
+    // (AGENTS.md didn't exist or had no fog-context section yet)
+    let is_first_run = !existing.contains(marker);
+    let onboarding = if is_first_run && symbols > 0 {
+        format!(
+            "\n\
+            ### 🔴 First-time Setup — MANDATORY Knowledge Layer Bootstrap\n\
+            > fog-context indexed Layer 1 (Physical: {symbols} symbols). \
+            Layers 2-4 are empty — Knowledge Score: 0/100.\n\
+            > Complete these steps **once** to unlock full intelligence:\n\
+            \n\
+            ```\n\
+            Step 1 — Layer 2 (Business Domains): Tell fog-context what each area does\n\
+            fog_assign({{ domain: \"Authentication\", symbols: [\"login\", \"auth_check\"] }})\n\
+            fog_assign({{ domain: \"DataAccess\",     symbols: [\"db_query\", \"save_record\"] }})\n\
+            \n\
+            Step 2 — Layer 3 (Constraints): Ingest architecture rules from ADR files\n\
+            fog_constraints({{}})          ← scans logs/decisions/, docs/adr/, docs/decisions/\n\
+            \n\
+            Step 3 — Layer 4 (Decisions): Record WHY key design decisions were made\n\
+            fog_decisions({{ functions: [\"key_fn\"], reason: \"...\", revert_risk: \"LOW\" }})\n\
+            ```\n\
+            \n\
+            ### 🔴 MANDATORY: After Every Significant Change\n\
+            ```\n\
+            fog_decisions({{ functions: [\"changed_fn\"], reason: \"WHY it changed\", revert_risk: \"LOW|MEDIUM|HIGH\" }})\n\
+            ```\n\
+            > Completing a task without recording WHY = **KNOWLEDGE GAP VIOLATION**.\n\
+            > Knowledge Score rises from 0 → 100 as you populate Layers 2-4.\n",
+        )
+    } else {
+        String::new()
+    };
+
     let section = format!(
         "<!-- fog-context -->\n\
          ## fog-context MCP — Agent Instructions\n\
@@ -443,7 +478,8 @@ pub fn write_agents_md(root: &Path, files: usize, symbols: usize, elapsed_ms: u1
          1. **Orient:** fog_domains → fog_lookup\n\
          2. **Understand:** fog_inspect → fog_trace\n\
          3. **Before edit:** fog_impact (HIGH/CRITICAL → warn user)\n\
-         4. **After edit:** fog_decisions (record WHY)\n"
+         4. **After edit:** fog_decisions (record WHY){onboarding}"
     );
     let _ = std::fs::write(&agents_path, format!("{prefix}{section}"));
 }
+

@@ -27,41 +27,70 @@ pub fn definition() -> ToolDef {
 }
 
 pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> ToolCallResult {
-    let scan_path = args["path"].as_str()
-        .map(|p| project_root.join(p))
-        .unwrap_or_else(|| project_root.join("logs/decisions"));
+    // C2 fix: Search multiple ADR locations, not just logs/decisions.
+    // Priority order: explicit arg > .fog.yml > common convention paths
+    let default_paths = vec![
+        "logs/decisions",
+        "docs/decisions",
+        "docs/adr",
+        "docs/rules",
+        ".fog/rules",
+        ".agent/decisions",
+        "decisions",
+        "adr",
+    ];
 
-    if !scan_path.exists() {
+    // Check for .fog.yml with custom adr_paths
+    let fog_yml_paths = read_fog_yml_adr_paths(project_root);
+
+    let search_paths: Vec<std::path::PathBuf> = if let Some(p) = args["path"].as_str() {
+        // Explicit override
+        vec![project_root.join(p)]
+    } else if !fog_yml_paths.is_empty() {
+        fog_yml_paths.iter().map(|p| project_root.join(p)).collect()
+    } else {
+        default_paths.iter().map(|p| project_root.join(p)).collect()
+    };
+
+    let existing: Vec<_> = search_paths.iter().filter(|p| p.exists()).collect();
+
+    if existing.is_empty() {
+        let paths_tried: Vec<String> = search_paths.iter()
+            .map(|p| format!("  - {}", p.display()))
+            .collect();
         return ToolCallResult::ok(format!(
-            "⚠️  fog_constraints: Path '{}' not found.\n\
-             Create ADR files in logs/decisions/ or docs/rules/ with YAML frontmatter:\n\
+            "⚠️  fog_constraints: No ADR directories found. Tried:\n{}\n\n\
+             Create one of these directories and add `.md` files with YAML frontmatter:\n\
              ```yaml\n\
              ---\n\
              code: NO_DIRECT_DB\n\
              severity: ERROR\n\
              statement: \"Handlers must not call DB directly\"\n\
              ---\n\
-             ```",
-            scan_path.display()
+             ```\n\
+             Or create a `.fog.yml` at root with `adr_paths: [custom/path]`",
+            paths_tried.join("\n")
         ));
     }
 
-    // Scan markdown files for YAML frontmatter constraints
     let mut imported = 0usize;
     let mut files_scanned = 0usize;
+    let mut dirs_scanned: Vec<String> = Vec::new();
 
-    if let Ok(entries) = std::fs::read_dir(&scan_path) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) == Some("md") {
-                files_scanned += 1;
-                if let Ok(content) = std::fs::read_to_string(&path) {
-                    // Parse YAML frontmatter between --- delimiters
-                    if let Some(constraints) = parse_adr_constraints(&content) {
-                        for (code, severity, statement) in constraints {
-                            match db.insert_constraint(&code, &severity, &statement) {
-                                Ok(_) => imported += 1,
-                                Err(e) => tracing::warn!("fog_constraints: skip {code}: {e}"),
+    for scan_path in &existing {
+        dirs_scanned.push(format!("{}", scan_path.display()));
+        if let Ok(entries) = std::fs::read_dir(scan_path) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("md") {
+                    files_scanned += 1;
+                    if let Ok(content) = std::fs::read_to_string(&path) {
+                        if let Some(constraints) = parse_adr_constraints(&content) {
+                            for (code, severity, statement) in constraints {
+                                match db.insert_constraint(&code, &severity, &statement) {
+                                    Ok(_) => imported += 1,
+                                    Err(e) => tracing::warn!("fog_constraints: skip {code}: {e}"),
+                                }
                             }
                         }
                     }
@@ -71,10 +100,42 @@ pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> To
     }
 
     ToolCallResult::ok(format!(
-        "✅ fog_constraints: Loaded {imported} constraints from {files_scanned} files in {}",
-        scan_path.display()
+        "✅ fog_constraints: Loaded {imported} constraints from {files_scanned} files\n\
+         Scanned directories:\n{}",
+        dirs_scanned.iter().map(|d| format!("  - {d}")).collect::<Vec<_>>().join("\n")
     ))
 }
+
+/// Read custom adr_paths from .fog.yml if present.
+fn read_fog_yml_adr_paths(project_root: &std::path::Path) -> Vec<String> {
+    let yml_path = project_root.join(".fog.yml");
+    let content = match std::fs::read_to_string(&yml_path) {
+        Ok(c) => c,
+        Err(_) => return vec![],
+    };
+    // Simple line-based YAML parser: look for adr_paths: block
+    let mut in_adr = false;
+    let mut paths = Vec::new();
+    for line in content.lines() {
+        if line.trim_start().starts_with("adr_paths:") {
+            in_adr = true;
+            continue;
+        }
+        if in_adr {
+            if line.trim_start().starts_with('-') {
+                let p = line.trim_start().trim_start_matches('-').trim().trim_matches('"');
+                if !p.is_empty() {
+                    paths.push(p.to_string());
+                }
+            } else if !line.trim().is_empty() && !line.starts_with(' ') {
+                break; // new top-level key
+            }
+        }
+    }
+    paths
+}
+
+
 
 /// Parse YAML frontmatter from an ADR markdown file.
 /// Looks for: code, severity, statement fields.

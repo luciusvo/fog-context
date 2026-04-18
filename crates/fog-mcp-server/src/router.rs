@@ -63,7 +63,7 @@ pub fn dispatch(
         "fog_scan"    => tools::scan::handle(args, &db_guard, project_root),
         "fog_import"  => tools::import::handle(args, &db_guard, project_root),
 
-        "fog_brief"       => tools::brief::handle(args, &db_guard),
+        "fog_brief"       => tools::brief::handle(args, &db_guard, registry),
         "fog_lookup"      => tools::lookup::handle(args, &db_guard),
         "fog_outline"     => tools::outline::handle(args, &db_guard),
         "fog_inspect"     => tools::inspect::handle(args, &db_guard),

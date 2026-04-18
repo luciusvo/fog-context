@@ -137,10 +137,11 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
         }),
         "cpp" => Some(LangConfig {
             name: "cpp",
-            ts_language: tree_sitter_c::LANGUAGE.into(), // fallback: C grammar for C++ basic
-            def_query: C_DEF_QUERY,
-            call_query: C_CALL_QUERY,
-            kinds: C_KINDS,
+            // A3 fix: use proper C++ grammar (not C fallback) to handle class/template syntax
+            ts_language: tree_sitter_cpp::LANGUAGE.into(),
+            def_query: CPP_DEF_QUERY,
+            call_query: CPP_CALL_QUERY,
+            kinds: CPP_KINDS,
         }),
         "java" => Some(LangConfig {
             name: "java",
@@ -229,9 +230,11 @@ const RUST_CALL_QUERY: &str = r#"
 // =============================================================================
 // TypeScript (pure .ts files — LANGUAGE_TYPESCRIPT, no JSX)
 // =============================================================================
+// A3 fix: class_declaration and interface_declaration use type_identifier (not identifier)
+// in tree-sitter-typescript >= 0.23. Using identifier causes "Impossible pattern" error.
 const TS_DEF_QUERY: &str = r#"
 (function_declaration name: (identifier) @name) @def
-(class_declaration name: (identifier) @name) @def
+(class_declaration name: (type_identifier) @name) @def
 (method_definition name: (property_identifier) @name) @def
 (interface_declaration name: (type_identifier) @name) @def
 (type_alias_declaration name: (type_identifier) @name) @def
@@ -247,20 +250,19 @@ const TS_CALL_QUERY: &str = r#"
 // =============================================================================
 // TSX / JSX (.tsx, .jsx, .js — LANGUAGE_TSX, JSX-aware grammar)
 // =============================================================================
-// Key fixes over TS_DEF_QUERY:
-//   1. Uses LANGUAGE_TSX which doesn't choke on <div /> syntax.
-//   2. Captures `export default function(){}` (anonymous — no name field).
-//   3. Captures `const Comp = () => <jsx>` (arrow returning JSX element).
+// A2 fix: TSX grammar does NOT have a bare `function` node type.
+// Use `arrow_function` and `function_expression` instead.
+// `function_declaration` is still valid for named top-level functions.
 const TSX_DEF_QUERY: &str = r#"
 (function_declaration name: (identifier) @name) @def
-(class_declaration name: (identifier) @name) @def
+(class_declaration name: (type_identifier) @name) @def
 (method_definition name: (property_identifier) @name) @def
 (interface_declaration name: (type_identifier) @name) @def
 (type_alias_declaration name: (type_identifier) @name) @def
 (enum_declaration name: (identifier) @name) @def
 (lexical_declaration (variable_declarator
     name: (identifier) @name
-    value: [(arrow_function) (function)]
+    value: [(arrow_function) (function_expression)]
 )) @def
 "#;
 const TSX_KINDS: &[&str] = &["function","class","method","interface","type_alias","enum","const"];
@@ -306,6 +308,27 @@ const C_KINDS: &[&str] = &["function","struct","enum","type_alias"];
 const C_CALL_QUERY: &str = r#"
 (call_expression function: (identifier) @name) @call
 (call_expression function: (field_expression field: (field_identifier) @name)) @call
+"#;
+
+// =============================================================================
+// C++  (proper grammar — handles templates, classes, namespaces)
+// =============================================================================
+const CPP_DEF_QUERY: &str = r#"
+(function_definition declarator: (function_declarator declarator: (identifier) @name)) @def
+(function_definition declarator: (function_declarator
+    declarator: (qualified_identifier scope: (_) name: (identifier) @name))) @def
+(class_specifier name: (type_identifier) @name) @def
+(struct_specifier name: (type_identifier) @name) @def
+(enum_specifier name: (type_identifier) @name) @def
+(namespace_definition name: (identifier) @name) @def
+(function_definition declarator: (function_declarator
+    declarator: (destructor_name (identifier) @name))) @def
+"#;
+const CPP_KINDS: &[&str] = &["function","method","class","struct","enum","namespace","destructor"];
+const CPP_CALL_QUERY: &str = r#"
+(call_expression function: (identifier) @name) @call
+(call_expression function: (field_expression field: (field_identifier) @name)) @call
+(call_expression function: (qualified_identifier name: (identifier) @name)) @call
 "#;
 
 // =============================================================================

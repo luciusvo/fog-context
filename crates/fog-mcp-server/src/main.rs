@@ -76,8 +76,8 @@ fn parse_args() -> Args {
             "--list-tools" => cmd = Cmd::ListTools,
             // --- Subcommands ---
             "index" => {
-                let full = raw.get(i + 1).map(|s| s == "--full").unwrap_or(false);
-                if full { i += 1; }
+                // B4 fix: scan ALL remaining args for --full, not just positional i+1
+                let full = raw[i..].iter().any(|s| s == "--full" || s == "-f");
                 cmd = Cmd::Index { full };
             }
             "stats" => cmd = Cmd::Stats,
@@ -207,12 +207,17 @@ async fn main() {
             let db = open_from_project(&project_root).unwrap_or_else(|e| {
                 eprintln!("[fog] DB error: {e}"); std::process::exit(1);
             });
-            let fake_args = serde_json::json!({ "format": format, "layer": "all", "max_symbols": 200 });
-            let result = tools::inspect::handle(&fake_args, &db);
+            // B6 fix: export uses brief (full stats) not fog_inspect
+            let fmt = format.clone();
+            let fake_args = serde_json::json!({ "format": fmt });
+            let reg = Registry::load();
+            let result = tools::brief::handle(&fake_args, &db, &reg);
             let text = result.content.first().map(|c| c.text.as_str()).unwrap_or("{}");
             println!("{text}");
             return;
         }
+
+
 
         Cmd::Serve => {} // fall through to MCP loop
     }
@@ -271,7 +276,8 @@ async fn main() {
                 let id = req.id.clone().unwrap_or(json!(null));
                 match req.method.as_str() {
                     "initialize" => ok_response(id, handle_initialize()),
-                    "initialized" => continue, // notification, no response
+                    // B5 fix: notifications are fire-and-forget, must never get a response
+                    m if m.starts_with("notifications/") || m == "initialized" => continue,
                     "tools/list" => ok_response(id, handle_list_tools()),
                     "tools/call" => ok_response(
                         id,
