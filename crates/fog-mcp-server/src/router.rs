@@ -73,7 +73,7 @@ pub fn dispatch(
         "fog_domains"     => tools::domains::handle(args, &db_guard),
         "fog_assign"      => tools::assign::handle(args, &db_guard),
         "fog_constraints" => tools::constraints::handle(args, &db_guard, project_root),
-        "fog_decisions"   => tools::decisions::handle(args, &db_guard),
+        "fog_decisions"   => tools::decisions::handle(args, &db_guard, project_root),
         _ => ToolCallResult::err(format!(
             "Unknown tool: '{tool_name}'. Available: {}",
             list_tools().iter().map(|t| t.name).collect::<Vec<_>>().join(", ")

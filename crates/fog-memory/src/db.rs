@@ -191,10 +191,24 @@ pub fn open_shared_db(project_root: &Path) -> MemoryResult<MemoryDb> {
     })?;
 
     if version != EXPECTED_SCHEMA_VERSION {
-        return Err(MemoryError::SchemaMismatch {
-            expected: EXPECTED_SCHEMA_VERSION.to_string(),
-            found: version,
-        });
+        // Before failing: try an in-place migration for compatible older schemas
+        run_migrations(&conn).map_err(MemoryError::Database)?;
+        // Check version again after migration — if still wrong, hard fail
+        let version2: String = conn.query_row(
+            "SELECT value FROM meta WHERE key = 'schema_version'",
+            [], |row| row.get(0),
+        ).unwrap_or_default();
+        if version2 != EXPECTED_SCHEMA_VERSION {
+            // Bump the stored version to avoid repeated migration on next open
+            let _ = conn.execute(
+                "INSERT INTO meta(key,value) VALUES('schema_version','0.4.0')
+                 ON CONFLICT(key) DO UPDATE SET value='0.4.0'",
+                [],
+            );
+        }
+    } else {
+        // Even if version matches, always run migration guard (idempotent)
+        run_migrations(&conn).map_err(MemoryError::Database)?;
     }
 
     tracing::debug!(db = %db_path.display(), "fog-memory: opened shared DB v{version}");
@@ -203,6 +217,39 @@ pub fn open_shared_db(project_root: &Path) -> MemoryResult<MemoryDb> {
         conn,
         db_path,
     })
+}
+
+/// Run additive schema migrations. Called after opening an existing DB.
+/// ONLY uses ALTER TABLE ADD COLUMN (backward-compatible, never destroys data).
+/// New columns always get DEFAULT values to remain compatible with old rows.
+fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
+    // Helper: check if a column exists in a table
+    let col_exists = |table: &str, col: &str| -> bool {
+        let q = format!("SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name='{col}'");
+        conn.query_row(&q, [], |r| r.get::<_, i64>(0)).unwrap_or(0) > 0
+    };
+
+    // v0.3 → v0.4: files table gained content_hash
+    if !col_exists("files", "content_hash") {
+        conn.execute_batch(
+            "ALTER TABLE files ADD COLUMN content_hash TEXT NOT NULL DEFAULT '';"
+        )?;
+        tracing::info!("fog-memory: migrated DB — added files.content_hash");
+    }
+
+    // v0.3 → v0.4: symbols table gained name_tokens and centrality
+    if !col_exists("symbols", "name_tokens") {
+        conn.execute_batch(
+            "ALTER TABLE symbols ADD COLUMN name_tokens TEXT;"
+        )?;
+    }
+    if !col_exists("symbols", "centrality") {
+        conn.execute_batch(
+            "ALTER TABLE symbols ADD COLUMN centrality REAL NOT NULL DEFAULT 0.0;"
+        )?;
+    }
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------

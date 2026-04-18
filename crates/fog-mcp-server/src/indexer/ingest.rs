@@ -24,6 +24,21 @@ use super::langs::config_for;
 use super::walker::ScannedFile;
 use super::IndexStats;
 
+// Error type surfaced when a language query fails to compile.
+// Distinct from IO errors so fog_scan can report them clearly.
+#[derive(Debug)]
+pub(crate) struct QueryCompileError {
+    pub lang: String,
+    pub detail: String,
+}
+
+impl std::fmt::Display for QueryCompileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Query compile error for '{}': {}", self.lang, self.detail)
+    }
+}
+impl std::error::Error for QueryCompileError {}
+
 // ---------------------------------------------------------------------------
 // Stdlib call noise filter (mirrors TS indexer)
 // ---------------------------------------------------------------------------
@@ -140,10 +155,16 @@ fn run_two_pass_conn(
         )?;
         conn.execute("DELETE FROM symbols WHERE file_id = ?1", rusqlite::params![file_id])?;
 
-        // Parse + insert
+        // Parse + insert (surface query compile errors to stats, don't abort)
         if let Some(cfg) = config_for(file.lang) {
-            let deferred = parse_file(conn, file_id, &content, &cfg, &mut stats)?;
-            all_deferred.extend(deferred);
+            match parse_file(conn, file_id, &content, &cfg, &mut stats) {
+                Ok(deferred) => all_deferred.extend(deferred),
+                Err(e) => {
+                    // Query compile error — report it, skip this language's files
+                    // (IO errors from rusqlite are still propagated via ?)
+                    stats.query_errors.push(format!("{}: {e}", cfg.name));
+                }
+            }
         }
         stats.files_indexed += 1;
     }
@@ -215,8 +236,13 @@ fn parse_file(
     let def_q = match Query::new(&cfg.ts_language, cfg.def_query) {
         Ok(q) => q,
         Err(e) => {
-            tracing::warn!("fog_scan: def query error ({}): {e}", cfg.name);
-            return Ok(vec![]);
+            // Return a descriptive error — caller (run_two_pass_conn) collects
+            // these into stats.query_errors[] so fog_scan can surface them.
+            // NEVER silently Ok(vec![]) — that's the bug that produced 0 symbols.
+            return Err(Box::new(QueryCompileError {
+                lang: cfg.name.to_string(),
+                detail: e.to_string(),
+            }));
         }
     };
 

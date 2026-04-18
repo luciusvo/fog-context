@@ -3,9 +3,9 @@
 //! Language detection and Tree-sitter parser configuration.
 //! Maps file extensions → (language name, tree-sitter Language, AST queries).
 //!
-//! Supported (14 languages — parity with TS version):
-//!   Rust · TypeScript/TSX · JavaScript/JSX · Python
-//!   Go · C · C++ · Java · C# · Ruby · PHP · Kotlin · Lua
+//! Supported (15 language configs — TypeScript and TSX are handled separately):
+//!   Rust · TypeScript · TSX/JSX · Python
+//!   Go · C · C++ · Java · C# · Ruby · PHP · Kotlin · Lua · Swift · Dart
 //!
 //! Capture name convention:
 //!   @name  — the identifier node (function/class name)
@@ -54,9 +54,10 @@ pub fn lang_for_extension(ext: &str) -> Option<&'static str> {
     match ext {
         // Rust
         "rs"                            => Some("rust"),
-        // TypeScript / JavaScript
-        "ts" | "tsx" | "mts" | "cts"   => Some("typescript"),
-        "js" | "jsx" | "mjs" | "cjs"   => Some("javascript"),
+        // TypeScript (pure TS, no JSX)
+        "ts" | "mts" | "cts"           => Some("typescript"),
+        // TSX / JSX — uses separate grammar with JSX support
+        "tsx" | "jsx" | "js" | "mjs" | "cjs" => Some("tsx"),
         // Python
         "py" | "pyi"                    => Some("python"),
         // Go
@@ -97,12 +98,21 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             call_query: RUST_CALL_QUERY,
             kinds: RUST_KINDS,
         }),
-        "typescript" | "javascript" => Some(LangConfig {
+        "typescript" => Some(LangConfig {
             name: "typescript",
             ts_language: tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
             def_query: TS_DEF_QUERY,
             call_query: TS_CALL_QUERY,
             kinds: TS_KINDS,
+        }),
+        // TSX / JSX: use LANGUAGE_TSX which understands JSX syntax (<div />, etc.)
+        // Without this, any React component file causes parser ERROR nodes and 0 symbols.
+        "tsx" => Some(LangConfig {
+            name: "tsx",
+            ts_language: tree_sitter_typescript::LANGUAGE_TSX.into(),
+            def_query: TSX_DEF_QUERY,
+            call_query: TS_CALL_QUERY,   // call patterns are the same
+            kinds: TSX_KINDS,
         }),
         "python" => Some(LangConfig {
             name: "python",
@@ -217,7 +227,7 @@ const RUST_CALL_QUERY: &str = r#"
 "#;
 
 // =============================================================================
-// TypeScript / JavaScript
+// TypeScript (pure .ts files — LANGUAGE_TYPESCRIPT, no JSX)
 // =============================================================================
 const TS_DEF_QUERY: &str = r#"
 (function_declaration name: (identifier) @name) @def
@@ -233,6 +243,27 @@ const TS_CALL_QUERY: &str = r#"
 (call_expression function: (identifier) @name) @call
 (call_expression function: (member_expression property: (property_identifier) @name)) @call
 "#;
+
+// =============================================================================
+// TSX / JSX (.tsx, .jsx, .js — LANGUAGE_TSX, JSX-aware grammar)
+// =============================================================================
+// Key fixes over TS_DEF_QUERY:
+//   1. Uses LANGUAGE_TSX which doesn't choke on <div /> syntax.
+//   2. Captures `export default function(){}` (anonymous — no name field).
+//   3. Captures `const Comp = () => <jsx>` (arrow returning JSX element).
+const TSX_DEF_QUERY: &str = r#"
+(function_declaration name: (identifier) @name) @def
+(class_declaration name: (identifier) @name) @def
+(method_definition name: (property_identifier) @name) @def
+(interface_declaration name: (type_identifier) @name) @def
+(type_alias_declaration name: (type_identifier) @name) @def
+(enum_declaration name: (identifier) @name) @def
+(lexical_declaration (variable_declarator
+    name: (identifier) @name
+    value: [(arrow_function) (function)]
+)) @def
+"#;
+const TSX_KINDS: &[&str] = &["function","class","method","interface","type_alias","enum","const"];
 
 // =============================================================================
 // Python

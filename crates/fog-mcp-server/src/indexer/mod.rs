@@ -30,6 +30,9 @@ pub struct IndexStats {
     pub edges_intra: usize,
     pub edges_cross: usize,
     pub elapsed_ms: u128,
+    /// Query compile errors per language (non-empty = some language was not indexed).
+    /// Example: ["tsx: QueryError { kind: Structure }"]
+    pub query_errors: Vec<String>,
 }
 
 /// Entry point called by fog_scan tool handler.
@@ -60,6 +63,16 @@ pub fn run_scan(
     // Step 3: Write AGENTS.md workflow guide
     ingest::write_agents_md(project_root, scanned.len(), stats.symbols_created, elapsed);
 
+    // Warn about any query compile errors so agents see them immediately
+    let warnings = if stats.query_errors.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n\n> [!WARNING]\n> **Parser errors** — the following languages may have 0 symbols:\n{}",
+            stats.query_errors.iter().map(|e| format!("> - `{e}`")).collect::<Vec<_>>().join("\n")
+        )
+    };
+
     ToolCallResult::ok(format!(
         "# fog_scan Complete ✅\n\
          - **Project:** {}\n\
@@ -68,7 +81,7 @@ pub fn run_scan(
          - **Edges:** {intra} intra-file + {cross} cross-file = {total_edges} total\n\
          - **Elapsed:** {elapsed}ms\n\
          \n\
-         Next: Use fog_lookup, fog_inspect, fog_impact to explore.",
+         Next: Use fog_lookup, fog_inspect, fog_impact to explore.{warnings}",
         project_root.display(),
         total = scanned.len(),
         indexed = stats.files_indexed,
