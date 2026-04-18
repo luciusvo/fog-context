@@ -102,3 +102,41 @@ pub trait MemoryEngine: Send {
 pub fn open_from_project(root: &Path) -> MemoryResult<MemoryDb> {
     open_shared_db(root)
 }
+
+/// Create the DB if it doesn't exist, then open it.
+///
+/// Used by **CLI `index` subcommand** and **MCP `fog_scan` first-run** to solve the
+/// Chicken-and-Egg problem: the indexer needs a DB to write to, but the DB
+/// doesn't exist until something creates it.
+///
+/// ## What it does
+/// 1. Creates `.fog-context/` directory if missing.
+/// 2. If `context.db` doesn't exist: initialises it with the canonical schema
+///    (equivalent to running `CREATE TABLE` migrations from SCHEMA_SQL).
+/// 3. Opens and returns the DB via `open_shared_db()`.
+///
+/// Idempotent — safe to call on an already-initialised project.
+pub fn create_or_open_db(root: &Path) -> MemoryResult<MemoryDb> {
+    let fog_dir = root.join(".fog-context");
+    let db_path = fog_dir.join("context.db");
+
+    if !db_path.exists() {
+        // Bootstrap: create directory + fresh schema
+        std::fs::create_dir_all(&fog_dir).map_err(|e| {
+            MemoryError::Database(rusqlite::Error::InvalidPath(
+                format!("cannot create .fog-context/: {e}").into()
+            ))
+        })?;
+
+        // Write schema into a brand-new SQLite file
+        let conn = rusqlite::Connection::open(&db_path)
+            .map_err(MemoryError::Database)?;
+        conn.execute_batch(db::SCHEMA_SQL)
+            .map_err(MemoryError::Database)?;
+
+        eprintln!("[fog-context] Initialised new DB at {}", db_path.display());
+    }
+
+    open_shared_db(root)
+}
+

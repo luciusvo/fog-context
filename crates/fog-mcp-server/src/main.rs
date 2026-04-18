@@ -32,7 +32,7 @@ mod tools;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use fog_memory::{MemoryDb, open_from_project};
+use fog_memory::{MemoryDb, open_from_project, create_or_open_db};
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
@@ -172,7 +172,8 @@ async fn main() {
 
         Cmd::Index { full } => {
             eprintln!("[fog] Indexing: {} (full={})", project_root.display(), full);
-            let db = open_from_project(&project_root).unwrap_or_else(|e| {
+            // create_or_open_db: bootstraps .fog-context/context.db if first run
+            let db = create_or_open_db(&project_root).unwrap_or_else(|e| {
                 eprintln!("[fog] DB error: {e}"); std::process::exit(1);
             });
             let result = crate::indexer::run_scan(&project_root, &db, full);
@@ -221,21 +222,20 @@ async fn main() {
     // ===========================================================
     let registry = Registry::load();
 
-    // Open DB
-    let db_result = open_from_project(&project_root);
+    // Open DB — use create_or_open_db so fog_scan can work on a fresh project
+    // without requiring the user to run CLI `index` first.
+    let db_result = create_or_open_db(&project_root);
     let db: Arc<Mutex<MemoryDb>> = match db_result {
         Ok(db) => {
             eprintln!("[fog-context] Project: {}", project_root.display());
             Arc::new(Mutex::new(db))
         }
         Err(e) => {
-            // Still start the server — fog_roots and fog_scan don't need a DB
+            // Genuine error (e.g. permissions) — still start the server with fallback
             eprintln!("[fog-context] Warning: DB not available ({}). Run fog_scan to index first.", e);
-            // Use in-memory DB as fallback so tools that don't need persistence still work
             let fallback = fog_memory::db::MemoryDb::open_empty()
                 .expect("in-memory fallback DB must always succeed");
             Arc::new(Mutex::new(fallback))
-
         }
     };
 

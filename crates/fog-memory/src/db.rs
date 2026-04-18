@@ -28,7 +28,7 @@ const DB_RELATIVE_PATH: &str = ".fog-context/context.db";
 
 /// Minimal schema SQL for creating a fresh in-memory fog-context DB.
 /// Mirrors the schema created by fog-context CLI `schema.sql`.
-const SCHEMA_SQL: &str = "
+pub(crate) const SCHEMA_SQL: &str = "
 PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS files (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
