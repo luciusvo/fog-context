@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build_release:
     name: Build ${{ matrix.file_name }}
@@ -73,6 +76,7 @@ jobs:
           git clone --depth 1 https://github.com/alex-pinkus/tree-sitter-swift.git
           git clone --depth 1 https://github.com/nickel-lang/tree-sitter-dart.git || \
           git clone --depth 1 https://github.com/nielsenko/tree-sitter-dart.git
+          npm install -g tree-sitter-cli
           cd tree-sitter-swift && npm install && npx tree-sitter generate
 
       # ── Rust toolchain ────────────────────────────────────────────────────
