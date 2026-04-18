@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fog-context"
+version = "0.5.1"
+description = "Agentic Codebase Intelligence Engine (MCP Server)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [
+    { name = "FoG Framework Contributors" }
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Topic :: Software Development :: Build Tools",
+]
+
+[project.urls]
+Homepage = "https://github.com/luciusvo/fog-context"
+Repository = "https://github.com/luciusvo/fog-context.git"
+
+[project.scripts]
+fog-context = "fog_context.__main__:main"

@@ -1,0 +1,57 @@
+[package]
+name        = "fog-mcp-server"
+description = "fog-context MCP server — 14-tool codebase intelligence engine"
+version.workspace    = true
+edition.workspace    = true
+rust-version.workspace = true
+license.workspace    = true
+
+[[bin]]
+name = "fog-mcp-server"
+path = "src/main.rs"
+
+[features]
+default  = []
+kotlin   = []
+swift    = []
+dart     = []
+all-langs = ["kotlin", "swift", "dart"]
+
+[dependencies]
+fog-memory  = { path = "../fog-memory" }
+fog-types   = { path = "../fog-types" }
+rusqlite    = { workspace = true }
+tokio       = { workspace = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+thiserror   = { workspace = true }
+tracing     = { workspace = true }
+chrono      = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+# Tree-sitter languages (12 native)
+tree-sitter             = { workspace = true }
+tree-sitter-rust        = { workspace = true }
+tree-sitter-typescript  = { workspace = true }
+tree-sitter-python      = { workspace = true }
+tree-sitter-go          = { workspace = true }
+tree-sitter-c           = { workspace = true }
+tree-sitter-java        = { workspace = true }
+tree-sitter-c-sharp     = { workspace = true }
+tree-sitter-ruby        = { workspace = true }
+tree-sitter-php         = { workspace = true }
+tree-sitter-lua         = { workspace = true }
+tree-sitter-language    = "0.1.7"
+streaming-iterator      = "0.1"
+
+# File walking
+ignore   = "0.4"
+walkdir  = "2"
+
+# Hashing
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[build-dependencies]
+cc = "1.0"

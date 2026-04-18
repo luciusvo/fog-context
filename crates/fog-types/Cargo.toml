@@ -1,0 +1,18 @@
+[package]
+name        = "fog-types"
+description = "Shared types for fog-context MCP server"
+version.workspace    = true
+edition.workspace    = true
+rust-version.workspace = true
+license.workspace    = true
+
+[dependencies]
+serde      = { workspace = true }
+serde_json = { workspace = true }
+uuid       = { workspace = true }
+thiserror  = { workspace = true }
+chrono     = { workspace = true }
+async-trait = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
