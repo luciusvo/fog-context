@@ -138,6 +138,13 @@ impl MemoryDb {
         &self.db_path
     }
 
+    /// Return total symbol count in DB (for registry reporting after incremental scan).
+    pub fn total_symbols(&self) -> u64 {
+        self.conn
+            .query_row("SELECT COUNT(*) FROM symbols", [], |r| r.get::<_, u64>(0))
+            .unwrap_or(0)
+    }
+
     /// Create a fresh in-memory DB with the fog-context v0.4.0 schema.
     /// Used as a safe fallback when no project DB exists yet.
     pub fn open_empty() -> MemoryResult<Self> {
@@ -149,6 +156,7 @@ impl MemoryDb {
         })
     }
 }
+
 
 // ---------------------------------------------------------------------------
 // open_shared_db — main entry point

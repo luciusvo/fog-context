@@ -1,6 +1,6 @@
 //! fog-mcp-server/src/tools/mod.rs
 //!
-//! 14 fog-context v0.5.0 tool handlers.
+//! 15 fog-context v0.5.5 tool handlers.
 //! Each tool delegates its DB work to fog-memory — NO direct SQL here.
 //!
 //! ## Tool Inventory
@@ -22,6 +22,7 @@
 //! | fog_decisions     | record_decision  | Advanced |
 //! | fog_import        | NEW: BRV+GitNexus L2/L3/L4 pump | Advanced |
 
+pub mod add_constraint;
 pub mod assign;
 pub mod brief;
 pub mod decisions;

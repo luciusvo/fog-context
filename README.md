@@ -41,7 +41,23 @@ After install, your fog home directory looks like:
 
 ### Step 2: Configure your AI editor (one-time, works for ALL repos)
 
-The key insight: use `${workspaceFolder}` so the same config auto-adapts to whichever repo you open.
+**fog-context auto-detects your project** from the process working directory (CWD).
+Most IDEs (Cursor, Cline, Windsurf) automatically set MCP server CWD = your open workspace folder.
+
+> [!IMPORTANT]
+> Do NOT hardcode `--project /path/to/specific/repo` in your config — this defeats the purpose of a universal setup and confuses AI agents when you switch projects.
+
+#### Cursor (`.cursor/mcp.json` at workspace root)
+
+```json
+{
+  "mcpServers": {
+    "fog-context": {
+      "command": "/home/your-username/.fog/bin/fog-mcp-server"
+    }
+  }
+}
+```
 
 #### Cline / Claude Desktop (`cline_mcp_settings.json` or `claude_desktop_config.json`)
 
@@ -49,27 +65,13 @@ The key insight: use `${workspaceFolder}` so the same config auto-adapts to whic
 {
   "mcpServers": {
     "fog-context": {
-      "command": "/home/your-username/.fog/bin/fog-mcp-server",
-      "args": ["--project", "${workspaceFolder}"]
+      "command": "/home/your-username/.fog/bin/fog-mcp-server"
     }
   }
 }
 ```
 
 > Replace `/home/your-username` with your actual home directory path.
-
-#### Cursor (`.cursor/mcp.json` at your home or workspace root)
-
-```json
-{
-  "mcpServers": {
-    "fog-context": {
-      "command": "${env:HOME}/.fog/bin/fog-mcp-server",
-      "args": ["--project", "${workspaceFolder}"]
-    }
-  }
-}
-```
 
 #### Zed (`~/.config/zed/settings.json`)
 
@@ -81,6 +83,22 @@ The key insight: use `${workspaceFolder}` so the same config auto-adapts to whic
         "path": "/home/your-username/.fog/bin/fog-mcp-server",
         "args": ["--project", "${ZED_WORKTREE_ROOT}"]
       }
+    }
+  }
+}
+```
+
+> **Note:** Zed requires `--project` explicitly because it doesn't set process CWD to the workspace root.
+
+#### Optional: Force a specific project with `--project`
+
+Use `--project` only if your IDE doesn't auto-set CWD, or for debugging:
+```json
+{
+  "mcpServers": {
+    "fog-context": {
+      "command": "/home/your-username/.fog/bin/fog-mcp-server",
+      "args": ["--project", "/path/to/specific/repo"]
     }
   }
 }
@@ -220,9 +238,14 @@ cp target/release/fog-mcp-server ~/.fog/bin/fog-mcp-server
 cargo build --release --package fog-mcp-server --features all-langs
 ```
 
+> **macOS Intel users:** No pre-built binary is provided (the `macos-13` GitHub Actions runner
+> is currently unavailable). Use the command above to build locally — takes ~2 minutes with
+> Rust installed. Alternatively, the ARM64 binary (`fog-mcp-macos-arm64`) runs transparently
+> on Intel Macs via Rosetta 2 (macOS 11+).
+
 ---
 
-## 14 MCP Tools
+## 15 MCP Tools
 
 | Tool | Purpose | Priority |
 |:---|:---|:---|
@@ -237,7 +260,8 @@ cargo build --release --package fog-mcp-server --features all-langs
 | `fog_gaps` | Find orphans, cycles, dead code | Advanced |
 | `fog_domains` | Query business domains and their symbols | Advanced |
 | `fog_assign` | Define/update a business domain | Advanced |
-| `fog_constraints` | Ingest ADR files as architecture constraints | Advanced |
+| `fog_constraints` | Ingest ADR files as architecture constraints (use `init:true` to bootstrap) | Advanced |
+| `fog_add_constraint` | Push a constraint directly into Layer 3 (no ADR file needed) | Advanced |
 | `fog_decisions` | Record WHY code was changed (builds causality log) | Advanced |
 | `fog_import` | Migrate from ByteRover / GitNexus to fog-context | Advanced |
 

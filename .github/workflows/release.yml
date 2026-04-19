@@ -29,17 +29,15 @@ jobs:
             musl: true
             cross: true          # use cross-rs for ARM cross-compilation
 
-          # ── macOS Apple Silicon (M1/M2/M3) ────────────────────────────────
+          # ── macOS Apple Silicon (M1/M2/M3/M4) ─────────────────────────────
           - os: macos-latest
             target: aarch64-apple-darwin
             file_name: fog-mcp-macos-arm64
             musl: false
 
-          # ── macOS Intel (x86_64) ──────────────────────────────────────────
-          - os: macos-13             # last Intel macOS runner
-            target: x86_64-apple-darwin
-            file_name: fog-mcp-macos-amd64
-            musl: false
+          # ── macOS Intel removed: macos-13 runner is unavailable (9h+ wait).
+          # Intel Mac users: run `cargo build --release --package fog-mcp-server`
+          # or use the ARM64 binary via Rosetta 2 (works transparently on macOS 11+).
 
           # ── Windows x86_64 ────────────────────────────────────────────────
           - os: windows-latest
@@ -125,8 +123,8 @@ jobs:
             |:---------|:-----|
             | Linux x86_64 | `fog-mcp-linux-amd64` |
             | Linux ARM64 | `fog-mcp-linux-arm64` |
-            | macOS Apple Silicon | `fog-mcp-macos-arm64` |
-            | macOS Intel | `fog-mcp-macos-amd64` |
+            | macOS Apple Silicon (M1/M2/M3/M4) | `fog-mcp-macos-arm64` |
+            | macOS Intel | ⚠️ No pre-built binary — [build from source](https://github.com/luciusvo/fog-context#build-from-source) or use ARM64 via Rosetta 2 |
             | Windows x86_64 | `fog-mcp-windows-amd64.exe` |
 
             ### Quick Setup (Claude Desktop / Cline)

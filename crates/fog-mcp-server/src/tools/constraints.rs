@@ -20,6 +20,10 @@ pub fn definition() -> ToolDef {
                     "type": "string",
                     "description": "Override scan path (relative to project root). Default: logs/decisions/ and docs/rules/"
                 },
+                "init": {
+                    "type": "boolean",
+                    "description": "If true, create logs/decisions/ directory and a template ADR file if none exist."
+                },
                 "project": { "type": "string" }
             }
         }),
@@ -27,6 +31,11 @@ pub fn definition() -> ToolDef {
 }
 
 pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> ToolCallResult {
+    // E6: init mode — bootstrap Layer 3 by creating template ADR directory + file
+    if args["init"].as_bool().unwrap_or(false) {
+        return handle_init(project_root);
+    }
+
     // C2 fix: Search multiple ADR locations, not just logs/decisions.
     // Priority order: explicit arg > .fog.yml > common convention paths
     let default_paths = vec![
@@ -156,3 +165,59 @@ fn parse_adr_constraints(content: &str) -> Option<Vec<(String, String, String)>>
 
     Some(vec![(code, severity, statement)])
 }
+
+/// E6: Bootstrap Layer 3 by creating template ADR structure.
+fn handle_init(project_root: &std::path::Path) -> ToolCallResult {
+    let adr_dir = project_root.join("logs/decisions");
+    let template_path = adr_dir.join("0001-invariants-template.md");
+
+    if template_path.exists() {
+        return ToolCallResult::ok(format!(
+            "✅ ADR directory already exists: {}\n\
+             Run fog_constraints({{}}) to scan existing ADR files.",
+            adr_dir.display()
+        ));
+    }
+
+    if let Err(e) = std::fs::create_dir_all(&adr_dir) {
+        return ToolCallResult::err(format!("fog_constraints init: failed to create {}: {e}", adr_dir.display()));
+    }
+
+    let template = concat!(
+        "---\n",
+        "code: EXAMPLE_CONSTRAINT\n",
+        "severity: ERROR\n",
+        "statement: \"Replace this with your architecture rule (e.g. 'Handlers must not call DB directly')\"\n",
+        "---\n",
+        "\n",
+        "# ADR-0001: Architecture Invariants\n",
+        "\n",
+        "## Context\n",
+        "Describe the architectural context and why this constraint exists.\n",
+        "\n",
+        "## Decision\n",
+        "Document the specific rule and the reasoning behind it.\n",
+        "\n",
+        "## Consequences\n",
+        "Describe what changes if this rule is violated.\n",
+        "\n",
+        "---\n",
+        "<!-- Add more constraints as additional --- blocks or new .md files -->\n"
+    );
+
+    if let Err(e) = std::fs::write(&template_path, template) {
+        return ToolCallResult::err(format!("fog_constraints init: failed to write template: {e}"));
+    }
+
+    ToolCallResult::ok(format!(
+        "✅ fog_constraints init complete!\n\
+         Created: {}\n\n\
+         Next steps:\n\
+         1. Edit {} — replace EXAMPLE_CONSTRAINT with your rules\n\
+         2. Run fog_constraints({{}}) to load them into Layer 3\n\
+         3. Run fog_brief({{}}) to verify constraints count > 0",
+        adr_dir.display(),
+        template_path.display()
+    ))
+}
+

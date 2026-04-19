@@ -15,22 +15,28 @@ pub fn definition() -> ToolDef {
         input_schema: json!({
             "type": "object",
             "properties": {
-                "name": { "type": "string", "description": "Domain name (e.g. 'Authentication')." },
+                "name":   { "type": "string", "description": "Domain name (e.g. 'Authentication'). Alias: 'domain'." },
+                "domain": { "type": "string", "description": "Alias for 'name'. Either 'name' or 'domain' is required." },
                 "symbols": { "type": "array", "items": { "type": "string" } },
                 "keywords": { "type": "array", "items": { "type": "string" } },
                 "constraints": { "type": "array", "items": { "type": "string" } },
                 "project": { "type": "string" }
-            },
-            "required": ["name"]
+            }
         }),
     }
 }
 
 pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
-    let name = match args["name"].as_str() {
-        Some(n) if !n.is_empty() => n,
-        _ => return ToolCallResult::err("fog_assign: 'name' is required"),
-    };
+    // E4: Accept "domain" as alias for "name" (AGENTS.md uses "domain")
+    let name = args["name"].as_str()
+        .or_else(|| args["domain"].as_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| {
+            return ""
+        });
+    if name.is_empty() {
+        return ToolCallResult::err("fog_assign: 'name' or 'domain' is required");
+    }
 
     let symbols: Vec<String> = args["symbols"].as_array()
         .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())

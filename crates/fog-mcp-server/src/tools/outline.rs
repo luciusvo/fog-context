@@ -33,6 +33,23 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
         _ => return ToolCallResult::err("fog_outline: 'path' is required"),
     };
 
+    // E5: Root path gives 0 results — explain clearly instead of misleading "not indexed" error
+    let is_root = matches!(path, "." | "./" | "/" | "");
+    if is_root {
+        return ToolCallResult::ok(
+            "⚠️  fog_outline does not support root directory — it would return too many symbols.\n\
+             Specify a file or subdirectory instead:\n\
+             ```\n\
+             fog_outline({ \"path\": \"src/\" })          ← outline a directory\n\
+             fog_outline({ \"path\": \"src/main.rs\" })   ← outline a single file\n\
+             ```\n\
+             To search symbols across the whole codebase, use:\n\
+             ```\n\
+             fog_lookup({ \"query\": \"your_function_name\" })\n\
+             ```"
+        );
+    }
+
     let kind_filter = args["kind"].as_str();
     let max_symbols = args["max_symbols"].as_u64().unwrap_or(100) as usize;
     let include_docs = args["include_docs"].as_bool().unwrap_or(false);
@@ -42,10 +59,15 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
         Ok(symbols) => {
             if symbols.is_empty() {
                 return ToolCallResult::ok(format!(
-                    "No symbols found in '{path}'. \
-                     Check the path or run fog_scan to index first, then use fog_lookup to search."
+                    "No symbols found in '{path}'.\n\
+                     Check that:\n\
+                     1. The path is correct (relative to project root)\n\
+                     2. The project is indexed — run fog_scan if unsure\n\
+                     3. The file type is supported\n\
+                     Try fog_lookup to search by symbol name instead."
                 ));
             }
+
             let mut lines = vec![format!("# fog_outline: `{path}` ({} symbols)\n", symbols.len())];
             for s in &symbols {
                 let doc = if include_docs {

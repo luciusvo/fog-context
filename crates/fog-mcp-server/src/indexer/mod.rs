@@ -47,17 +47,23 @@ pub fn run_scan(
 ) -> ToolCallResult {
     let start = std::time::Instant::now();
 
+    // E7: Progress feedback to stderr (visible in CLI, silent to MCP JSON-RPC stdout)
+    eprintln!("[fog] Walking files: {}", project_root.display());
+
     // Step 1: Walk files (gitignore-aware)
     let scanned = walker::walk_project(project_root);
     if scanned.is_empty() {
         return ToolCallResult::ok("⚠️  No source files found. Is the project path correct?");
     }
+    eprintln!("[fog] Found {} files. Starting indexer (full={})...", scanned.len(), full);
 
     // Step 2: Run two-pass indexer
     let stats = match ingest::run_two_pass(project_root, db, &scanned, full) {
         Ok(s) => s,
         Err(e) => return ToolCallResult::err(format!("fog_scan error: {e}")),
     };
+    eprintln!("[fog] Pass 1 done: {} symbols, {} intra-file edges", stats.symbols_created, stats.edges_intra);
+    eprintln!("[fog] Pass 2 done: {} cross-file edges", stats.edges_cross);
 
     let elapsed = start.elapsed().as_millis();
 
@@ -65,15 +71,18 @@ pub fn run_scan(
     ingest::write_agents_md(project_root, scanned.len(), stats.symbols_created, elapsed);
 
     // Step 4: Register project in global ~/.fog/registry.json
-    // This makes fog_roots aware of this project after every scan.
+    // E2 fix: Query TOTAL symbols from DB (not delta) so re-scans don't show symbol_count=0
     {
         let name = project_root
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| "unknown".into());
         let path = project_root.to_string_lossy().into_owned();
+        // Query actual total from DB — incremental scan may have symbols_created=0
+        let total_symbols = db.total_symbols();
         let mut reg = Registry::load();
-        reg.upsert(name, path, stats.symbols_created as u64);
+        reg.upsert(name, path, total_symbols);
+        eprintln!("[fog] Registry updated: {} total symbols", total_symbols);
     }
 
     // Warn about any query compile errors so agents see them immediately
@@ -90,7 +99,7 @@ pub fn run_scan(
         "# fog_scan Complete ✅\n\
          - **Project:** {}\n\
          - **Files:** {total} scanned, {indexed} indexed, {deleted} deleted\n\
-         - **Symbols:** {syms}\n\
+         - **Symbols (new):** {syms}\n\
          - **Edges:** {intra} intra-file + {cross} cross-file = {total_edges} total\n\
          - **Elapsed:** {elapsed}ms\n\
          \n\
@@ -105,3 +114,4 @@ pub fn run_scan(
         total_edges = stats.edges_intra + stats.edges_cross,
     ))
 }
+
