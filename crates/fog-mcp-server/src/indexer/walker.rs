@@ -30,7 +30,7 @@ pub struct ScannedFile {
 /// - Hidden directories (skipped)
 /// - `node_modules/`, `target/`, `dist/` (auto-excluded by `ignore` crate)
 ///
-/// PATTERN_DECISION: Level 1 (Pure Function — input path → output file list)
+/// PATTERN_DECISION: Level 1 (Pure Function - input path → output file list)
 pub fn walk_project(root: &Path) -> Vec<ScannedFile> {
     let mut files = Vec::new();
 

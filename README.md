@@ -1,6 +1,6 @@
-# fog-context — Agentic Codebase Intelligence Engine
+# fog-context - Agentic Codebase Intelligence Engine
 
-> **v0.5.3 — Rust Rewrite** | Zero runtime dependency | <5ms cold start | 14 MCP Tools
+> **v0.5.3 - Rust Rewrite** | Zero runtime dependency | <5ms cold start | 14 MCP Tools
 
 fog-context is a **dual-mode binary** that serves as the memory backbone for AI agents working on large codebases. It provides a 5-layer knowledge graph via the Model Context Protocol (MCP), integrating with Cursor, Cline, Claude Desktop, and Zed.
 
@@ -8,7 +8,7 @@ fog-context is a **dual-mode binary** that serves as the memory backbone for AI 
 
 ## One-time Global Setup (Do this once per machine)
 
-fog-context uses a **single universal binary** at `~/.fog/bin/fog-mcp-server` shared across all your repos. You only install once — every project just points to the same binary.
+fog-context uses a **single universal binary** at `~/.fog/bin/fog-mcp-server` shared across all your repos. You only install once - every project just points to the same binary.
 
 ### Step 1: Download the binary
 
@@ -41,14 +41,25 @@ After install, your fog home directory looks like:
 
 ### Step 2: Configure your AI editor (one-time, works for ALL repos)
 
-**fog-context auto-detects your project** from the process working directory (CWD).
-Most IDEs (Cursor, Cline, Windsurf) automatically set MCP server CWD = your open workspace folder.
+fog-context resolves the active project using this **priority chain** (highest first):
 
-> [!IMPORTANT]
-> Do NOT hardcode `--project /path/to/specific/repo` in your config — this defeats the purpose of a universal setup and confuses AI agents when you switch projects.
+| Priority | Method | When to use |
+|:---------|:-------|:------------|
+| P1 | `--project /path` arg | Force a specific repo (single-project setup) |
+| P2 | `.fog-context/` found in CWD | Auto-detect if IDE sets CWD = workspace ✅ |
+| P3 | Walk up ancestors for `.fog-context/` | Handles subdirectory launches |
+| P4 | `FOG_PROJECT` env var | Headless agents, CI, when CWD is unreliable |
+| P5 | CWD fallback | Last resort — logs a warning |
 
-#### Cursor (`.cursor/mcp.json` at workspace root)
+Choose the scenario that matches your setup:
 
+---
+
+#### Scenario A - IDE sets CWD = workspace (Cursor, Windsurf, most IDEs)
+
+**No args needed** — fog-context auto-detects the project from CWD.
+
+**Cursor** (`.cursor/mcp.json`):
 ```json
 {
   "mcpServers": {
@@ -59,8 +70,7 @@ Most IDEs (Cursor, Cline, Windsurf) automatically set MCP server CWD = your open
 }
 ```
 
-#### Cline / Claude Desktop (`cline_mcp_settings.json` or `claude_desktop_config.json`)
-
+**Cline / Claude Desktop** (`cline_mcp_settings.json`):
 ```json
 {
   "mcpServers": {
@@ -71,10 +81,47 @@ Most IDEs (Cursor, Cline, Windsurf) automatically set MCP server CWD = your open
 }
 ```
 
-> Replace `/home/your-username` with your actual home directory path.
+---
 
-#### Zed (`~/.config/zed/settings.json`)
+#### Scenario B - Headless agents or unreliable CWD (Antigravity, CI bots)
 
+Use `FOG_PROJECT` env var — safer than CWD, more flexible than hardcoded `--project`:
+
+```json
+{
+  "mcpServers": {
+    "fog-context": {
+      "command": "/home/your-username/.fog/bin/fog-mcp-server",
+      "env": {
+        "FOG_PROJECT": "/home/your-username/myproject"
+      }
+    }
+  }
+}
+```
+
+> [!TIP]
+> Some IDEs support `${workspaceFolder}` in env values:
+> `"FOG_PROJECT": "${workspaceFolder}"` — this is more reliable than CWD for Cline + headless setups.
+
+---
+
+#### Scenario C - Force a specific project (single-project users or Zed)
+
+Use `--project` when you always work on one repo, or when your IDE doesn't set CWD:
+
+```json
+{
+  "mcpServers": {
+    "fog-context": {
+      "command": "/home/your-username/.fog/bin/fog-mcp-server",
+      "args": ["--project", "/home/your-username/myproject"]
+    }
+  }
+}
+```
+
+**Zed** (`~/.config/zed/settings.json`):
 ```json
 {
   "context_servers": {
@@ -88,23 +135,12 @@ Most IDEs (Cursor, Cline, Windsurf) automatically set MCP server CWD = your open
 }
 ```
 
-> **Note:** Zed requires `--project` explicitly because it doesn't set process CWD to the workspace root.
-
-#### Optional: Force a specific project with `--project`
-
-Use `--project` only if your IDE doesn't auto-set CWD, or for debugging:
-```json
-{
-  "mcpServers": {
-    "fog-context": {
-      "command": "/home/your-username/.fog/bin/fog-mcp-server",
-      "args": ["--project", "/path/to/specific/repo"]
-    }
-  }
-}
-```
+> [!IMPORTANT]
+> Call `fog_brief({})` at the start of every session to verify which project fog-context is serving.
+> The output shows **Name**, **Path**, and **fog_id** so you can confirm immediately.
 
 ---
+
 
 ## Adding a New Repo (What AI Agents Should Do)
 
@@ -191,7 +227,7 @@ your-project/
 If your project stores ADRs somewhere other than `logs/decisions/`:
 
 ```yaml
-# .fog.yml — fog-context project config (optional)
+# .fog.yml - fog-context project config (optional)
 adr_paths:
   - docs/decisions
   - docs/adr
@@ -234,12 +270,12 @@ cargo build --release --package fog-mcp-server
 # Copy to universal location:
 cp target/release/fog-mcp-server ~/.fog/bin/fog-mcp-server
 
-# With mobile language support (Kotlin/Swift/Dart — requires native C toolchain)
+# With mobile language support (Kotlin/Swift/Dart - requires native C toolchain)
 cargo build --release --package fog-mcp-server --features all-langs
 ```
 
 > **macOS Intel users:** No pre-built binary is provided (the `macos-13` GitHub Actions runner
-> is currently unavailable). Use the command above to build locally — takes ~2 minutes with
+> is currently unavailable). Use the command above to build locally - takes ~2 minutes with
 > Rust installed. Alternatively, the ARM64 binary (`fog-mcp-macos-arm64`) runs transparently
 > on Intel Macs via Rosetta 2 (macOS 11+).
 
@@ -249,7 +285,7 @@ cargo build --release --package fog-mcp-server --features all-langs
 
 | Tool | Purpose | Priority |
 |:---|:---|:---|
-| `fog_brief` | Index health check — **call first every session** | 🔴 Mandatory |
+| `fog_brief` | Index health check - **call first every session** | 🔴 Mandatory |
 | `fog_scan` | Index or re-index project with Tree-sitter | Core |
 | `fog_lookup` | Full-text search for symbols by name/doc | Core |
 | `fog_outline` | Lightweight file outline (names+sigs, no source) | Core |
@@ -339,4 +375,4 @@ git push origin --tags   # Triggers release build for Linux/macOS/Windows
 
 ## License
 
-MIT — See [LICENSE](LICENSE)
+MIT - See [LICENSE](LICENSE)

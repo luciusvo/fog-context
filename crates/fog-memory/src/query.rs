@@ -1,4 +1,4 @@
-//! fog-memory/query.rs — Read-only intelligence queries
+//! fog-memory/query.rs - Read-only intelligence queries
 //!
 //! Implements 6 read operations mirroring the fog-context TypeScript tools:
 //!   search()         → FTS5 BM25 + centrality + time-decay
@@ -129,7 +129,7 @@ pub struct KnowledgeScore {
 }
 
 // ---------------------------------------------------------------------------
-// search() — FTS5 BM25 + centrality boost + time-decay
+// search() - FTS5 BM25 + centrality boost + time-decay
 // ---------------------------------------------------------------------------
 
 impl MemoryDb {
@@ -196,12 +196,12 @@ impl MemoryDb {
     }
 
     // ---------------------------------------------------------------------------
-    // context_symbol() — 360° view
+    // context_symbol() - 360° view
     // ---------------------------------------------------------------------------
 
     /// Get full context for a symbol: callers, callees, constraints, decisions.
     ///
-    /// PATTERN_DECISION: Level 2 (Composition — builds from 4 sub-queries)
+    /// PATTERN_DECISION: Level 2 (Composition - builds from 4 sub-queries)
     pub fn context_symbol(&self, name: &str) -> MemoryResult<Option<SymbolContext>> {
         let conn = self.conn();
 
@@ -317,14 +317,14 @@ impl MemoryDb {
     }
 
     // ---------------------------------------------------------------------------
-    // impact() — Recursive CTE blast radius
+    // impact() - Recursive CTE blast radius
     // ---------------------------------------------------------------------------
 
     /// Compute blast radius: what breaks if symbol `target` changes.
     ///
     /// Returns upstream callers and downstream dependencies up to `depth` hops.
     ///
-    /// PATTERN_DECISION: Level 1 (Pure Function — recursive CTE, read-only)
+    /// PATTERN_DECISION: Level 1 (Pure Function - recursive CTE, read-only)
     pub fn impact(&self, target: &str, depth: u32, direction: &str) -> MemoryResult<ImpactResult> {
         let conn = self.conn();
 
@@ -430,7 +430,7 @@ impl MemoryDb {
     }
 
     // ---------------------------------------------------------------------------
-    // route_map() — Call tree traversal
+    // route_map() - Call tree traversal
     // ---------------------------------------------------------------------------
 
     /// Trace the call tree from an entry point symbol.
@@ -540,7 +540,7 @@ impl MemoryDb {
     }
 
     // ---------------------------------------------------------------------------
-    // domain_catalog() — List all business domains
+    // domain_catalog() - List all business domains
     // ---------------------------------------------------------------------------
 
     /// List all registered business domains with symbol and constraint counts.
@@ -574,10 +574,10 @@ impl MemoryDb {
     }
 
     // ---------------------------------------------------------------------------
-    // knowledge_score() — Gamification health metric
+    // knowledge_score() - Gamification health metric
     // ---------------------------------------------------------------------------
 
-    /// Compute the Knowledge Score — how well-populated are Layers 2-5.
+    /// Compute the Knowledge Score - how well-populated are Layers 2-5.
     ///
     /// Score 0-100: penalizes empty domains, constraints, decisions.
     /// Matches the `health()` output from fog-context TypeScript.
@@ -637,7 +637,7 @@ impl MemoryDb {
     }
 
     // ---------------------------------------------------------------------------
-    // skeleton() — lightweight outline (Phase 4A: queries existing indexed symbols)
+    // skeleton() - lightweight outline (Phase 4A: queries existing indexed symbols)
     // ---------------------------------------------------------------------------
 
     /// List symbols in a file or directory, token-efficiently.
@@ -693,7 +693,7 @@ impl MemoryDb {
     }
 
     // ---------------------------------------------------------------------------
-    // query_domain() — get full domain detail (symbols + constraints + decisions)
+    // query_domain() - get full domain detail (symbols + constraints + decisions)
     // ---------------------------------------------------------------------------
 
     /// Query a specific business domain by name.
@@ -778,14 +778,14 @@ impl MemoryDb {
     }
 
     // ---------------------------------------------------------------------------
-    // graph_query() — safe templated graph analysis
+    // graph_query() - safe templated graph analysis
     // ---------------------------------------------------------------------------
 
     /// Run a pre-defined graph analysis template.
     ///
     /// Templates: find_cycles, find_orphans, find_shared_callers, find_communities, find_path
     ///
-    /// PATTERN_DECISION: Level 3 (HOF + dispatch map — template_name → query fn)
+    /// PATTERN_DECISION: Level 3 (HOF + dispatch map - template_name → query fn)
     pub fn graph_query(&self, template: &str, params: &serde_json::Value) -> MemoryResult<Vec<serde_json::Value>> {
         use serde_json::json;
         let conn = self.conn();

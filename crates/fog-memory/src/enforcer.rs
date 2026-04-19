@@ -1,10 +1,10 @@
-//! fog-memory/enforcer.rs — Gateway Loop Interceptors
+//! fog-memory/enforcer.rs - Gateway Loop Interceptors
 //!
 //! The Enforcer is the **active enforcement** component of Track 2.
 //! It intercepts agent tool calls via fog-harness/gateway_loop and
 //! automatically triggers required memory-maintenance actions.
 //!
-//! ## Enforcement Rules (R6 — Zero Trust)
+//! ## Enforcement Rules (R6 - Zero Trust)
 //!
 //! | Trigger | Action |
 //! |:--------|:-------|
@@ -16,7 +16,7 @@
 //!
 //! ## Design
 //!
-//! The Enforcer is **read-side-free** — it never blocks the agent's original request.
+//! The Enforcer is **read-side-free** - it never blocks the agent's original request.
 //! It acts *in addition to* (not instead of) the agent's intended action.
 //!
 //! PATTERN_DECISION: Level 4 (Simple Class)
@@ -32,19 +32,19 @@ use crate::{
 };
 
 // ---------------------------------------------------------------------------
-// EnforcerAction — what the interceptor detected + decided
+// EnforcerAction - what the interceptor detected + decided
 // ---------------------------------------------------------------------------
 
 /// Classification of an incoming agent tool call.
 #[derive(Debug, Clone, PartialEq)]
 pub enum EnforcerAction {
-    /// Normal tool call — no special enforcement needed.
+    /// Normal tool call - no special enforcement needed.
     Passthrough,
     /// Tool call should be mirrored to the native MemoryDb.
     Mirror { tool: String, payload: String },
-    /// Agent hasn't called record_decision in too long — inject nudge.
+    /// Agent hasn't called record_decision in too long - inject nudge.
     InjectNudge { message: String },
-    /// A file was changed — agent should call record_decision.
+    /// A file was changed - agent should call record_decision.
     AutoCommit { hint: String },
 }
 
@@ -59,7 +59,7 @@ pub struct EnforcerResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Enforcer — stateful interceptor
+// Enforcer - stateful interceptor
 // ---------------------------------------------------------------------------
 
 /// Session-scoped enforcer that tracks agent behavior across turns.
@@ -110,7 +110,7 @@ impl Enforcer {
         if *count >= self.nudge_threshold {
             let msg = format!(
                 "⚠️  Memory Maintenance Due: {count} tool calls since last record_decision. \
-                 Consider calling record_decision() to log your reasoning (R4 — FoG protocol).",
+                 Consider calling record_decision() to log your reasoning (R4 - FoG protocol).",
             );
             return EnforcerResponse {
                 action: EnforcerAction::InjectNudge { message: msg.clone() },
@@ -244,7 +244,7 @@ mod tests {
         // Mirror call resets counter
         let payload = r#"{"functions":["foo"],"reason":"test"}"#;
         enf.intercept("record_decision", payload);
-        // Counter reset — should not nudge immediately
+        // Counter reset - should not nudge immediately
         let resp = enf.intercept("search", "{}");
         assert_eq!(resp.action, EnforcerAction::Passthrough);
     }

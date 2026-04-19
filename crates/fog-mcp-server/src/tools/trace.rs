@@ -1,4 +1,4 @@
-//! fog_trace — execution flow tracer.
+//! fog_trace - execution flow tracer.
 //! Replaces: route_map
 
 use fog_memory::MemoryDb;
@@ -46,7 +46,7 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
             for node in &result.nodes {
                 let indent = "  ".repeat(node.depth as usize);
                 let connector = if node.depth == 0 { "▶" } else { "└─" };
-                lines.push(format!("{indent}{connector} `{}` [{}] — {}", node.name, node.kind, node.file));
+                lines.push(format!("{indent}{connector} `{}` [{}] - {}", node.name, node.kind, node.file));
             }
             if result.truncated {
                 lines.push(format!(

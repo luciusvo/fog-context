@@ -1,4 +1,4 @@
-//! fog_impact — blast radius analysis.
+//! fog_impact - blast radius analysis.
 //! Replaces: impact
 
 use fog_memory::MemoryDb;
@@ -9,7 +9,7 @@ pub use crate::protocol::ToolDef;
 pub fn definition() -> ToolDef {
     ToolDef {
         name: "fog_impact",
-        description: "Blast radius analysis — shows what breaks if you change a symbol. \
+        description: "Blast radius analysis - shows what breaks if you change a symbol. \
             Returns risk level (LOW/MEDIUM/HIGH/CRITICAL), upstream callers, and downstream deps. \
             ALWAYS run this before modifying a function. HIGH/CRITICAL → warn user.",
         input_schema: json!({
@@ -54,7 +54,7 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
             ];
             if result.risk == "HIGH" || result.risk == "CRITICAL" {
                 lines.push(format!(
-                    "\n⚠️  **Stop** — risk is {}. Get explicit user approval before editing.", result.risk
+                    "\n⚠️  **Stop** - risk is {}. Get explicit user approval before editing.", result.risk
                 ));
             }
             if let Some(hint) = &result._agent_hint {
@@ -63,13 +63,13 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
             if !result.upstream.is_empty() {
                 lines.push(format!("\n## Upstream ({} callers)", result.upstream.len()));
                 for s in result.upstream.iter().take(20) {
-                    lines.push(format!("  L{} `{}` [{}] — {}", s.depth, s.name, s.kind, s.file));
+                    lines.push(format!("  L{} `{}` [{}] - {}", s.depth, s.name, s.kind, s.file));
                 }
             }
             if !result.downstream.is_empty() {
                 lines.push(format!("\n## Downstream ({} deps)", result.downstream.len()));
                 for s in result.downstream.iter().take(20) {
-                    lines.push(format!("  L{} `{}` [{}] — {}", s.depth, s.name, s.kind, s.file));
+                    lines.push(format!("  L{} `{}` [{}] - {}", s.depth, s.name, s.kind, s.file));
                 }
             }
             ToolCallResult::ok(lines.join("\n"))

@@ -1,7 +1,7 @@
-//! fog-memory/compressor.rs — Token estimation and context compression
+//! fog-memory/compressor.rs - Token estimation and context compression
 //!
 //! Lightweight token budget enforcement for route_map and export_snapshot.
-//! No external tokenizer dependency — uses character-based approximation.
+//! No external tokenizer dependency - uses character-based approximation.
 //!
 //! Rule: 1 token ≈ 4 chars (English prose/code average)
 //!
@@ -34,7 +34,7 @@ pub fn estimate_node_tokens(name: &str, kind: &str, file: &str) -> usize {
 /// Truncate a list of items to fit within a token budget.
 ///
 /// Returns `(truncated_items, was_truncated)`.
-/// Items are taken in order — priority should be established by the caller (sort first).
+/// Items are taken in order - priority should be established by the caller (sort first).
 ///
 /// PATTERN_DECISION: Level 1 (Pure Function)
 pub fn fit_to_budget<T, F>(items: Vec<T>, budget: usize, estimate: F) -> (Vec<T>, bool)

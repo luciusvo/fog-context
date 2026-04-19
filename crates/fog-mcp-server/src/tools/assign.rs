@@ -1,4 +1,4 @@
-//! fog_assign — tag symbols to a business domain.
+//! fog_assign - tag symbols to a business domain.
 //! Replaces: define_domain
 
 use fog_memory::{MemoryDb, write::DefineDomainArgs};

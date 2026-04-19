@@ -1,2 +1,2 @@
 # Grammar sources are cloned at CI time by .github/workflows/release.yml
-# Do not commit grammar sources — they are fetched fresh on each release build
+# Do not commit grammar sources - they are fetched fresh on each release build

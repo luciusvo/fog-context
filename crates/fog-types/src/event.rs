@@ -58,7 +58,7 @@ pub enum EventKind {
         tokens_after: usize,
     },
     /// Fired when context usage crosses the 80% compaction threshold.
-    /// fog.session.compaction_events — AEGIS L4 Lifecycle Gate metric.
+    /// fog.session.compaction_events - AEGIS L4 Lifecycle Gate metric.
     ContextCompactionTriggered {
         /// Integer percentage (0–100).
         context_pct: u32,
@@ -74,7 +74,7 @@ pub enum EventKind {
         to_model: String,
     },
     /// Fired when ≥4 consecutive identical tool calls are detected.
-    /// fog.session.doom_loops — AEGIS L4 Lifecycle Gate metric.
+    /// fog.session.doom_loops - AEGIS L4 Lifecycle Gate metric.
     /// Triggers immediate ESCALATE_MAGIC per FoG R5.
     DoomLoopDetected {
         /// The tool being called repeatedly.
@@ -112,7 +112,7 @@ pub enum EventKind {
         tool_name: String,
         /// Risk tier that caused the block.
         tier: u8,
-        /// Reason for blocking — injected as AEGIS_BLOCK error into conversation.
+        /// Reason for blocking - injected as AEGIS_BLOCK error into conversation.
         reason: String,
     },
 
@@ -127,7 +127,7 @@ pub enum EventKind {
     },
 
     // -----------------------------------------------------------------------
-    // T1-C: Streaming events — real-time feedback during LLM turns
+    // T1-C: Streaming events - real-time feedback during LLM turns
     // -----------------------------------------------------------------------
 
     /// A chunk of streamed text from the LLM (T1-C).
@@ -161,7 +161,7 @@ pub enum EventKind {
         remaining_budget_usd: Option<f64>,
     },
 
-    /// A transient streaming error — not fatal, may recover (T1-C).
+    /// A transient streaming error - not fatal, may recover (T1-C).
     ///
     /// Fired when a chunk is corrupted or the stream stalls temporarily.
     /// The agentic loop retries (up to circuit-breaker limit) on this event.

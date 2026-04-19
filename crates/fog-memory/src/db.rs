@@ -1,9 +1,9 @@
-//! fog-memory/db.rs — Shared DB connection to fog-context context.db
+//! fog-memory/db.rs - Shared DB connection to fog-context context.db
 //!
 //! ## Design
 //! - Opens `<project_root>/.fog-context/context.db` in WAL mode.
 //! - Verifies `meta.schema_version = '0.4.0'` before any queries.
-//! - Does NOT define schema — fog-context CLI creates/migrates the DB.
+//! - Does NOT define schema - fog-context CLI creates/migrates the DB.
 //!   fog-memory is a READER/WRITER of an already-initialized DB.
 //!
 //! ## fog-core vs fog-context DB paths
@@ -20,7 +20,7 @@ use rusqlite::Connection;
 
 use crate::{MemoryError, MemoryResult};
 
-/// Expected schema version — must match fog-context v0.4.0
+/// Expected schema version - must match fog-context v0.4.0
 const EXPECTED_SCHEMA_VERSION: &str = "0.4.0";
 
 /// Path relative to project root where fog-context stores its DB.
@@ -118,7 +118,7 @@ INSERT OR IGNORE INTO meta(key, value) VALUES ('schema_version', '0.4.0');
 ";
 
 // ---------------------------------------------------------------------------
-// MemoryDb — thin wrapper around rusqlite Connection
+// MemoryDb - thin wrapper around rusqlite Connection
 // ---------------------------------------------------------------------------
 
 /// Thin wrapper around rusqlite Connection.
@@ -159,15 +159,15 @@ impl MemoryDb {
 
 
 // ---------------------------------------------------------------------------
-// open_shared_db — main entry point
+// open_shared_db - main entry point
 // ---------------------------------------------------------------------------
 
 /// Open the shared `fog-context` database at `<project_root>/.fog-context/context.db`.
 ///
 /// # Errors
-/// - `MemoryError::DbNotFound` — DB file does not exist (not yet indexed)
-/// - `MemoryError::SchemaMismatch` — schema_version != 0.4.0
-/// - `MemoryError::Database` — rusqlite open/pragma errors
+/// - `MemoryError::DbNotFound` - DB file does not exist (not yet indexed)
+/// - `MemoryError::SchemaMismatch` - schema_version != 0.4.0
+/// - `MemoryError::Database` - rusqlite open/pragma errors
 pub fn open_shared_db(project_root: &Path) -> MemoryResult<MemoryDb> {
     let db_path = project_root.join(DB_RELATIVE_PATH);
 
@@ -201,7 +201,7 @@ pub fn open_shared_db(project_root: &Path) -> MemoryResult<MemoryDb> {
     if version != EXPECTED_SCHEMA_VERSION {
         // Before failing: try an in-place migration for compatible older schemas
         run_migrations(&conn).map_err(MemoryError::Database)?;
-        // Check version again after migration — if still wrong, hard fail
+        // Check version again after migration - if still wrong, hard fail
         let version2: String = conn.query_row(
             "SELECT value FROM meta WHERE key = 'schema_version'",
             [], |row| row.get(0),
@@ -242,7 +242,7 @@ fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
         conn.execute_batch(
             "ALTER TABLE files ADD COLUMN content_hash TEXT NOT NULL DEFAULT '';"
         )?;
-        tracing::info!("fog-memory: migrated DB — added files.content_hash");
+        tracing::info!("fog-memory: migrated DB - added files.content_hash");
     }
 
     // v0.3 → v0.4: symbols table gained name_tokens and centrality
@@ -270,7 +270,7 @@ pub(crate) mod test_helpers {
 
     /// Create an in-memory DB with the fog-context v0.4.0 schema for tests.
     ///
-    /// Uses `:memory:` SQLite — no file I/O, fast, isolated per test.
+    /// Uses `:memory:` SQLite - no file I/O, fast, isolated per test.
     pub fn open_test_db() -> MemoryDb {
         let conn = Connection::open_in_memory().expect("in-memory DB");
 

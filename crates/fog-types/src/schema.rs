@@ -127,7 +127,7 @@ pub enum RelationKind {
 // ---------------------------------------------------------------------------
 
 /// A domain entity parsed from the project's GLOSSARY.md.
-/// Used for Zero-Trust anchoring — AI can only use terms defined here.
+/// Used for Zero-Trust anchoring - AI can only use terms defined here.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DomainEntity {
     pub name: String,

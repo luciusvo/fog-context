@@ -2,14 +2,14 @@
 //!
 //! Two-pass DB ingestion using Tree-sitter 0.24 (StreamingIterator API).
 //!
-//! Pass 1 — Parse each file, insert symbols + intra-file edges.
+//! Pass 1 - Parse each file, insert symbols + intra-file edges.
 //!           Queue unresolved cross-file calls for Pass 2.
-//! Pass 2 — Resolve deferred calls against the complete symbol index.
+//! Pass 2 - Resolve deferred calls against the complete symbol index.
 //!           Insert cross-file CALLS edges.
 //!
 //! PATTERN_DECISION: Level 2 (Composition)
 //! Isolation: this module uses rusqlite directly via a Connection ref
-//! obtained from the DB file path — fog-memory::MemoryDb::conn() is crate-private.
+//! obtained from the DB file path - fog-memory::MemoryDb::conn() is crate-private.
 //! We open our own connection for the indexer to avoid the borrow checker
 //! complexity of mixing rusqlite + tree-sitter lifetimes.
 
@@ -160,7 +160,7 @@ fn run_two_pass_conn(
             match parse_file(conn, file_id, &content, &cfg, &mut stats) {
                 Ok(deferred) => all_deferred.extend(deferred),
                 Err(e) => {
-                    // Query compile error — report it, skip this language's files
+                    // Query compile error - report it, skip this language's files
                     // (IO errors from rusqlite are still propagated via ?)
                     stats.query_errors.push(format!("{}: {e}", cfg.name));
                 }
@@ -236,9 +236,9 @@ fn parse_file(
     let def_q = match Query::new(&cfg.ts_language, cfg.def_query) {
         Ok(q) => q,
         Err(e) => {
-            // Return a descriptive error — caller (run_two_pass_conn) collects
+            // Return a descriptive error - caller (run_two_pass_conn) collects
             // these into stats.query_errors[] so fog_scan can surface them.
-            // NEVER silently Ok(vec![]) — that's the bug that produced 0 symbols.
+            // NEVER silently Ok(vec![]) - that's the bug that produced 0 symbols.
             return Err(Box::new(QueryCompileError {
                 lang: cfg.name.to_string(),
                 detail: e.to_string(),
@@ -435,20 +435,20 @@ pub fn write_agents_md(root: &Path, files: usize, symbols: usize, elapsed_ms: u1
     let onboarding = if is_first_run && symbols > 0 {
         format!(
             "\n\
-            ### 🔴 First-time Setup — MANDATORY Knowledge Layer Bootstrap\n\
+            ### 🔴 First-time Setup - MANDATORY Knowledge Layer Bootstrap\n\
             > fog-context indexed Layer 1 (Physical: {symbols} symbols). \
-            Layers 2-4 are empty — Knowledge Score: 0/100.\n\
+            Layers 2-4 are empty - Knowledge Score: 0/100.\n\
             > Complete these steps **once** to unlock full intelligence:\n\
             \n\
             ```\n\
-            Step 1 — Layer 2 (Business Domains): Tell fog-context what each area does\n\
+            Step 1 - Layer 2 (Business Domains): Tell fog-context what each area does\n\
             fog_assign({{ domain: \"Authentication\", symbols: [\"login\", \"auth_check\"] }})\n\
             fog_assign({{ domain: \"DataAccess\",     symbols: [\"db_query\", \"save_record\"] }})\n\
             \n\
-            Step 2 — Layer 3 (Constraints): Ingest architecture rules from ADR files\n\
+            Step 2 - Layer 3 (Constraints): Ingest architecture rules from ADR files\n\
             fog_constraints({{}})          ← scans logs/decisions/, docs/adr/, docs/decisions/\n\
             \n\
-            Step 3 — Layer 4 (Decisions): Record WHY key design decisions were made\n\
+            Step 3 - Layer 4 (Decisions): Record WHY key design decisions were made\n\
             fog_decisions({{ functions: [\"key_fn\"], reason: \"...\", revert_risk: \"LOW\" }})\n\
             ```\n\
             \n\
@@ -465,7 +465,7 @@ pub fn write_agents_md(root: &Path, files: usize, symbols: usize, elapsed_ms: u1
 
     let section = format!(
         "<!-- fog-context -->\n\
-         ## fog-context MCP — Agent Instructions\n\
+         ## fog-context MCP - Agent Instructions\n\
          > Auto-generated {now} | {files} files · {symbols} symbols · indexed in {elapsed_ms}ms\n\
          \n\
          ### MANDATORY: Start every session with these 2 calls\n\

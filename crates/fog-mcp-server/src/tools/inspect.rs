@@ -1,4 +1,4 @@
-//! fog_inspect — 360° symbol context view.
+//! fog_inspect - 360° symbol context view.
 //! Replaces: context
 
 use fog_memory::MemoryDb;
@@ -10,7 +10,7 @@ pub fn definition() -> ToolDef {
     ToolDef {
         name: "fog_inspect",
         description: "Get 360° context for a symbol: callers, callees, constraints, and decision history. \
-            USE THIS before modifying any function — it reveals blast radius and institutional memory.",
+            USE THIS before modifying any function - it reveals blast radius and institutional memory.",
         input_schema: json!({
             "type": "object",
             "properties": {
@@ -44,13 +44,13 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
             if !ctx.callers.is_empty() {
                 lines.push(format!("\n## Callers ({} upstream)", ctx.callers.len()));
                 for c in &ctx.callers {
-                    lines.push(format!("- `{}` [{}] — {}", c.name, c.kind, c.file));
+                    lines.push(format!("- `{}` [{}] - {}", c.name, c.kind, c.file));
                 }
             }
             if !ctx.callees.is_empty() {
                 lines.push(format!("\n## Callees ({} downstream)", ctx.callees.len()));
                 for c in &ctx.callees {
-                    lines.push(format!("- `{}` [{}] — {}", c.name, c.kind, c.file));
+                    lines.push(format!("- `{}` [{}] - {}", c.name, c.kind, c.file));
                 }
             }
             if !ctx.decisions.is_empty() {

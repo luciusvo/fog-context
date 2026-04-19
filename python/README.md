@@ -1,6 +1,6 @@
-# fog-context — Agentic Codebase Intelligence Engine
+# fog-context - Agentic Codebase Intelligence Engine
 
-> **v0.5.0 — Rust Rewrite** | Zero runtime dependency | <5ms cold start | 14 MCP Tools
+> **v0.5.0 - Rust Rewrite** | Zero runtime dependency | <5ms cold start | 14 MCP Tools
 
 fog-context is a **dual-mode binary** that serves as the memory backbone for AI agents working on large codebases. It provides a 5-layer knowledge graph via the Model Context Protocol (MCP), integrating with Cursor, Cline, Claude Desktop, and Zed.
 
@@ -8,7 +8,7 @@ fog-context is a **dual-mode binary** that serves as the memory backbone for AI 
 
 ## Quick Start
 
-### Option A — Download Binary (Recommended)
+### Option A - Download Binary (Recommended)
 Download the prebuilt binary for your platform from the [GitHub Releases](../../releases) page:
 
 | Platform | File |
@@ -17,7 +17,7 @@ Download the prebuilt binary for your platform from the [GitHub Releases](../../
 | macOS (Apple Silicon) | `fog-mcp-macos-arm64` |
 | Windows (x86_64) | `fog-mcp-windows-amd64.exe` |
 
-### Option B — Build from Source
+### Option B - Build from Source
 ```bash
 # Minimum Rust version: 1.75+
 cd IDE
@@ -87,7 +87,7 @@ fog-mcp-server --list-tools
 
 | Tool | Purpose | Priority |
 |:---|:---|:---|
-| `fog_brief` | Index health check — **call first every session** | 🔴 Mandatory |
+| `fog_brief` | Index health check - **call first every session** | 🔴 Mandatory |
 | `fog_scan` | Index or re-index project with Tree-sitter | Core |
 | `fog_lookup` | Full-text search for symbols by name/doc | Core |
 | `fog_outline` | Lightweight file outline (names+sigs, no source) | Core |
@@ -169,4 +169,4 @@ See `MCP/fog-context-repo/ARCHIVED.md` for migration notes.
 
 ## License
 
-MIT — See [LICENSE](LICENSE)
+MIT - See [LICENSE](LICENSE)

@@ -1,8 +1,8 @@
-//! fog-mcp-server — Dual-mode binary: MCP server + CLI tool.
+//! fog-mcp-server - Dual-mode binary: MCP server + CLI tool.
 //!
-//! fog-context v0.5.0 — Rust rewrite of the TypeScript fog-context-repo.
+//! fog-context v0.5.0 - Rust rewrite of the TypeScript fog-context-repo.
 //!
-//! ## MCP Mode (Default — for AI Agents)
+//! ## MCP Mode (Default - for AI Agents)
 //! JSON-RPC 2.0 over stdio. Connect from Cursor, Cline, Claude Desktop, Zed.
 //!
 //! ## CLI Mode (for humans / CI pipelines)
@@ -29,7 +29,7 @@ mod registry;
 mod router;
 mod tools;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use fog_memory::{MemoryDb, open_from_project, create_or_open_db};
@@ -148,14 +148,76 @@ fn handle_tools_call(
 // Main loop
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// F2: Smart project root resolution
+// ---------------------------------------------------------------------------
+
+/// Resolve the project root using a priority chain:
+///   P1: Explicit --project arg
+///   P2: CWD has .fog-context/ → valid project root
+///   P3: Walk up ancestors to find .fog-context/
+///   P4: FOG_PROJECT env var (for headless agents / CI)
+///   P5: CWD fallback with WARNING log
+fn resolve_project_root(explicit: Option<PathBuf>) -> PathBuf {
+    // P1: Explicit --project arg
+    if let Some(p) = explicit {
+        return p;
+    }
+
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    // P2/P3: Probe CWD and ancestors for .fog-context/
+    if let Some(root) = find_project_root_from(&cwd) {
+        return root;
+    }
+
+    // P4: FOG_PROJECT env var
+    if let Ok(p) = std::env::var("FOG_PROJECT") {
+        let path = PathBuf::from(&p);
+        if path.exists() {
+            eprintln!("[fog-context] Using FOG_PROJECT env: {}", path.display());
+            return path;
+        } else {
+            eprintln!("[fog-context] WARNING: FOG_PROJECT='{}' does not exist, ignoring.", p);
+        }
+    }
+
+    // P5: CWD fallback — warn clearly
+    eprintln!("[fog-context] INFO: No .fog-context/ found from CWD '{}'.", cwd.display());
+    eprintln!("[fog-context]      Will create new project index here on fog_scan.");
+    eprintln!("[fog-context]      Or set: FOG_PROJECT=/path/to/repo  to point to existing project.");
+    cwd
+}
+
+/// Walk up directory tree from `start` looking for a `.fog-context/` subdirectory.
+/// Returns the directory that contains .fog-context/, or None if not found.
+fn find_project_root_from(start: &Path) -> Option<PathBuf> {
+    let mut current = start.to_path_buf();
+    loop {
+        if current.join(".fog-context").is_dir() {
+            return Some(current);
+        }
+        // Legacy: .fog-id at project root
+        if current.join(".fog-id").exists() {
+            return Some(current);
+        }
+        match current.parent() {
+            Some(p) => {
+                let p: PathBuf = p.to_path_buf();
+                if p == current { return None; }
+                current = p;
+            }
+            None => return None,
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let args = parse_args();
 
     // Resolve project root
-    let project_root = args.project.unwrap_or_else(|| {
-        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-    });
+    let project_root = resolve_project_root(args.project);
 
     // ===========================================================
     // CLI sub-command dispatch (non-interactive, exits when done)
@@ -163,9 +225,9 @@ async fn main() {
     match args.cmd {
         Cmd::ListTools => {
             let tools = router::list_tools();
-            println!("fog-context v{} — {} tools available:", env!("CARGO_PKG_VERSION"), tools.len());
+            println!("fog-context v{} - {} tools available:", env!("CARGO_PKG_VERSION"), tools.len());
             for t in &tools {
-                println!("  {} — {}", t.name, t.description.lines().next().unwrap_or(""));
+                println!("  {} - {}", t.name, t.description.lines().next().unwrap_or(""));
             }
             return;
         }
@@ -192,7 +254,7 @@ async fn main() {
             });
             match db.knowledge_score() {
                 Ok(s) => {
-                    println!("fog-context v{} — Stats for: {}", env!("CARGO_PKG_VERSION"), project_root.display());
+                    println!("fog-context v{} - Stats for: {}", env!("CARGO_PKG_VERSION"), project_root.display());
                     println!("  Symbols    : {}", s.total_symbols);
                     println!("  Domains    : {}", s.total_domains);
                     println!("  Decisions  : {}", s.total_decisions);
@@ -207,14 +269,14 @@ async fn main() {
             let db = open_from_project(&project_root).unwrap_or_else(|e| {
                 eprintln!("[fog] DB error: {e}"); std::process::exit(1);
             });
-            // B6 fix: export uses brief (full stats) not fog_inspect
             let fmt = format.clone();
             let fake_args = serde_json::json!({ "format": fmt });
             let reg = Registry::load();
-            let result = tools::brief::handle(&fake_args, &db, &reg);
+            let result = tools::brief::handle(&fake_args, &db, &reg, &project_root);
             let text = result.content.first().map(|c| c.text.as_str()).unwrap_or("{}");
             println!("{text}");
             return;
+
         }
 
 
@@ -227,7 +289,7 @@ async fn main() {
     // ===========================================================
     let registry = Registry::load();
 
-    // Open DB — use create_or_open_db so fog_scan can work on a fresh project
+    // Open DB - use create_or_open_db so fog_scan can work on a fresh project
     // without requiring the user to run CLI `index` first.
     let db_result = create_or_open_db(&project_root);
     let db: Arc<Mutex<MemoryDb>> = match db_result {
@@ -236,7 +298,7 @@ async fn main() {
             Arc::new(Mutex::new(db))
         }
         Err(e) => {
-            // Genuine error (e.g. permissions) — still start the server with fallback
+            // Genuine error (e.g. permissions) - still start the server with fallback
             eprintln!("[fog-context] Warning: DB not available ({}). Run fog_scan to index first.", e);
             let fallback = fog_memory::db::MemoryDb::open_empty()
                 .expect("in-memory fallback DB must always succeed");
@@ -254,7 +316,7 @@ async fn main() {
     loop {
         line.clear();
         match stdin.read_line(&mut line).await {
-            Ok(0) => break, // EOF — client disconnected
+            Ok(0) => break, // EOF - client disconnected
             Err(e) => {
                 eprintln!("[fog-context] stdin error: {e}");
                 break;

@@ -1,4 +1,4 @@
-//! fog_lookup — symbol search via BM25 FTS5 + centrality ranking.
+//! fog_lookup - symbol search via BM25 FTS5 + centrality ranking.
 //! Replaces: search
 
 use fog_memory::MemoryDb;
@@ -11,7 +11,7 @@ pub fn definition() -> ToolDef {
         name: "fog_lookup",
         description: "Search project symbols (functions, classes, structs, enums, etc.) \
             using BM25 full-text search weighted by call-graph centrality. \
-            Faster and smarter than grep — finds by name, signature, or doc comment. \
+            Faster and smarter than grep - finds by name, signature, or doc comment. \
             Supports prefix search (query ending with '*') and kind filter.",
         input_schema: json!({
             "type": "object",
@@ -44,7 +44,7 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
             let mut lines = vec![format!("# fog_lookup: '{query}' ({} results)\n", results.len())];
             for r in &results {
                 lines.push(format!(
-                    "**{}** `{}` — {}\n  📁 {}:{}\n",
+                    "**{}** `{}` - {}\n  📁 {}:{}\n",
                     r.name, r.kind,
                     r.signature.as_deref().unwrap_or(""),
                     r.file, r.start_line,

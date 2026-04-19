@@ -1,4 +1,4 @@
-//! fog_decisions — log WHY a code change was made.
+//! fog_decisions - log WHY a code change was made.
 //! Replaces: record_decision
 
 use std::path::Path;
@@ -41,7 +41,7 @@ pub fn handle(args: &Value, db: &MemoryDb, project_root: &Path) -> ToolCallResul
     };
 
     // ── 2-Tier symbol validation ──────────────────────────────────────────────
-    // Tier 1: DB lookup (fast path — preferred when index is fresh)
+    // Tier 1: DB lookup (fast path - preferred when index is fresh)
     // Open direct connection since MemoryDb::conn() is pub(crate)
     let db_match = rusqlite::Connection::open(db.db_path()).ok().map(|conn| {
         functions.iter().any(|f| {

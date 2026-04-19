@@ -1,13 +1,13 @@
 //! fog-mcp-server/src/tools/import.rs
 //!
-//! fog_import — Tool #14: Import legacy knowledge (Layers 2/3/4) into fog-context.
+//! fog_import - Tool #14: Import legacy knowledge (Layers 2/3/4) into fog-context.
 //!
 //! Sources:
 //!   - ByteRover (.brv/context-tree/)  → Domains (Layer 2) + Constraints (Layer 3)
 //!   - GitNexus  (.gitnexus/*.db)      → Domains + Constraints + Decisions (Layers 2/3/4)
 //!
 //! Intentionally imports ONLY Layers 2/3/4. Layer 1 (symbols/files/edges) is
-//! deliberately excluded because indexer algorithms differ between systems —
+//! deliberately excluded because indexer algorithms differ between systems -
 //! merging raw symbol rows would cause primary-key conflicts and duplicate noise.
 //!
 //! PATTERN_DECISION: Level 2 (Composition of pure extractors)
@@ -27,7 +27,7 @@ use crate::protocol::{ToolCallResult, ToolDef};
 pub fn definition() -> ToolDef {
     ToolDef {
         name: "fog_import",
-        description: "Import legacy knowledge (Domains/Constraints/Decisions — Layers 2/3/4) \
+        description: "Import legacy knowledge (Domains/Constraints/Decisions - Layers 2/3/4) \
                       from ByteRover (.brv/) or GitNexus (.gitnexus/) into fog-context. \
                       Layer 1 (symbols) is intentionally excluded to avoid indexer conflicts. \
                       Use source='auto' to detect both. Supports dry_run preview.",
@@ -121,7 +121,7 @@ struct ImportReport {
 
 impl ImportReport {
     fn render(&self, dry_run: bool) -> String {
-        let prefix = if dry_run { "🔍 DRY RUN — " } else { "" };
+        let prefix = if dry_run { "🔍 DRY RUN - " } else { "" };
         let action = if dry_run { "Would import" } else { "Imported" };
         let mut out = format!("# {}fog_import Results\n\n", prefix);
 
@@ -135,7 +135,7 @@ impl ImportReport {
         }
 
         if self.gnx_domains + self.gnx_constraints + self.gnx_decisions > 0 {
-            out += "\n## GitNexus (Layer 2/3/4 only — symbols excluded)\n";
+            out += "\n## GitNexus (Layer 2/3/4 only - symbols excluded)\n";
             out += &format!("- **{action} {} domains**\n", self.gnx_domains);
             out += &format!("- **{action} {} constraints**\n", self.gnx_constraints);
             out += &format!("- **{action} {} decisions**\n", self.gnx_decisions);
@@ -300,7 +300,7 @@ fn extract_brv_constraints(content: &str, source_dir: &str) -> Vec<ConstraintDra
 }
 
 // ---------------------------------------------------------------------------
-// GitNexus SQL pump (Layers 2/3/4 only — no symbols)
+// GitNexus SQL pump (Layers 2/3/4 only - no symbols)
 // ---------------------------------------------------------------------------
 
 fn find_gitnexus_db(project_root: &Path) -> Vec<PathBuf> {
@@ -376,7 +376,7 @@ fn import_gitnexus(gnx_path: &Path, db: &fog_memory::MemoryDb, dry_run: bool, re
             ).unwrap_or(0) as usize;
         }
 
-        // Layer 4: Decisions (causality log — always safe to merge)
+        // Layer 4: Decisions (causality log - always safe to merge)
         if has_decisions {
             conn.execute_batch(
                 "INSERT OR IGNORE INTO main.decisions (domain, functions, reason, revert_risk, status, created_at)

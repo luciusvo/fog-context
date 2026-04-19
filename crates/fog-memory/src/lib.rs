@@ -1,9 +1,9 @@
-//! fog-memory — FoG IDE Native Intelligence Engine
+//! fog-memory - FoG IDE Native Intelligence Engine
 //!
 //! **Track 2** of the Dual-Track Architecture (ADR-001).
 //!
 //! Shares `context.db` with `fog-context` (Track 1, TypeScript/MCP) but adds
-//! **enforced compliance** — the AI agent cannot skip Layers 2-5 maintenance
+//! **enforced compliance** - the AI agent cannot skip Layers 2-5 maintenance
 //! because `fog-harness/gateway_loop` intercepts and injects required calls.
 //!
 //! ## Architecture
@@ -52,7 +52,7 @@ pub enum MemoryError {
     #[error("schema mismatch: expected {expected}, found {found}")]
     SchemaMismatch { expected: String, found: String },
 
-    #[error("DB not found at {path} — run `fog-context index` first")]
+    #[error("DB not found at {path} - run `fog-context index` first")]
     DbNotFound { path: String },
 
     #[error("serialization error: {0}")]
@@ -62,7 +62,7 @@ pub enum MemoryError {
 pub type MemoryResult<T> = Result<T, MemoryError>;
 
 // ---------------------------------------------------------------------------
-// MemoryEngine trait — unified interface used by fog-harness
+// MemoryEngine trait - unified interface used by fog-harness
 // ---------------------------------------------------------------------------
 
 /// Unified interface for all fog-memory operations.
@@ -71,7 +71,7 @@ pub type MemoryResult<T> = Result<T, MemoryError>;
 ///
 /// PATTERN_DECISION: Level 4 (trait-based DI)
 /// Justification: allows fog-harness to mock in unit tests without a real DB.
-/// Note: `Send` only (not `Sync`) — rusqlite::Connection is not thread-safe.
+/// Note: `Send` only (not `Sync`) - rusqlite::Connection is not thread-safe.
 ///   Wrap in `Arc<Mutex<MemoryDb>>` for multi-threaded access.
 pub trait MemoryEngine: Send {
     // ── Read ──
@@ -95,7 +95,7 @@ pub trait MemoryEngine: Send {
 
 /// Open a `MemoryDb` from a project root directory.
 ///
-/// Looks for `<root>/.fog-context/context.db` — the standard location used
+/// Looks for `<root>/.fog-context/context.db` - the standard location used
 /// by both `fog-context` CLI and `fog-core` IDE server.
 ///
 /// Returns `Err(MemoryError::DbNotFound)` if the DB does not exist (not yet indexed).
@@ -115,7 +115,7 @@ pub fn open_from_project(root: &Path) -> MemoryResult<MemoryDb> {
 ///    (equivalent to running `CREATE TABLE` migrations from SCHEMA_SQL).
 /// 3. Opens and returns the DB via `open_shared_db()`.
 ///
-/// Idempotent — safe to call on an already-initialised project.
+/// Idempotent - safe to call on an already-initialised project.
 pub fn create_or_open_db(root: &Path) -> MemoryResult<MemoryDb> {
     let fog_dir = root.join(".fog-context");
     let db_path = fog_dir.join("context.db");

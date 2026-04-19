@@ -1,4 +1,4 @@
-//! fog-memory/write.rs — Write operations (Layer 2-5)
+//! fog-memory/write.rs - Write operations (Layer 2-5)
 //!
 //! Implements 4 write operations mirroring fog-context TypeScript tools:
 //!   record_decision()  → Layer 4 causality logger
@@ -53,11 +53,11 @@ pub struct ScratchpadUpdateArgs {
 }
 
 // ---------------------------------------------------------------------------
-// record_decision() — Layer 4
+// record_decision() - Layer 4
 // ---------------------------------------------------------------------------
 
 impl MemoryDb {
-    /// Record WHY code was changed — populates Layer 4 (Causality).
+    /// Record WHY code was changed - populates Layer 4 (Causality).
     ///
     /// Cross-validates that at least one of the listed functions exists in the index.
     /// If `supersedes_id` is set, marks the old decision as 'historical'.
@@ -118,10 +118,10 @@ impl MemoryDb {
     }
 
     // ---------------------------------------------------------------------------
-    // define_domain() — Layer 2
+    // define_domain() - Layer 2
     // ---------------------------------------------------------------------------
 
-    /// Register a business domain and link symbols to it — populates Layer 2.
+    /// Register a business domain and link symbols to it - populates Layer 2.
     ///
     /// Upserts the domain record, then links each named symbol (by name, not ID,
     /// so it works even before the symbol is indexed).
@@ -148,7 +148,7 @@ impl MemoryDb {
             |row| row.get(0),
         ).map_err(crate::MemoryError::Database)?;
 
-        // Link symbols (by name — may not be indexed yet, stored as symbol_name)
+        // Link symbols (by name - may not be indexed yet, stored as symbol_name)
         if let Some(symbols) = &args.symbols {
             for sym_name in symbols {
                 // Try to find resolved symbol_id
@@ -171,7 +171,7 @@ impl MemoryDb {
     }
 
     // ---------------------------------------------------------------------------
-    // scratchpad_get() — Layer 5 read
+    // scratchpad_get() - Layer 5 read
     // ---------------------------------------------------------------------------
 
     /// Read the current task state for an agent role.
@@ -210,13 +210,13 @@ impl MemoryDb {
     }
 
     // ---------------------------------------------------------------------------
-    // scratchpad_update() — Layer 5 write
+    // scratchpad_update() - Layer 5 write
     // ---------------------------------------------------------------------------
 
     /// Save or update the task state for an agent role.
     ///
     /// Creates the namespace if it doesn't exist (upsert semantics).
-    /// Only fields with `Some(...)` are updated — `None` fields are left unchanged.
+    /// Only fields with `Some(...)` are updated - `None` fields are left unchanged.
     ///
     /// PATTERN_DECISION: Level 1 (Pure Function with DB side effect)
     pub fn scratchpad_update(&self, role: &str, state: ScratchpadUpdateArgs) -> MemoryResult<()> {
@@ -273,7 +273,7 @@ impl MemoryDb {
     }
 
     // ---------------------------------------------------------------------------
-    // insert_constraint() — Layer 3
+    // insert_constraint() - Layer 3
     // ---------------------------------------------------------------------------
 
     /// Insert a constraint (ADR invariant) into the constraints table.

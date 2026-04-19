@@ -3,17 +3,17 @@
 //! Language detection and Tree-sitter parser configuration.
 //! Maps file extensions → (language name, tree-sitter Language, AST queries).
 //!
-//! Supported (15 language configs — TypeScript and TSX are handled separately):
+//! Supported (15 language configs - TypeScript and TSX are handled separately):
 //!   Rust · TypeScript · TSX/JSX · Python
 //!   Go · C · C++ · Java · C# · Ruby · PHP · Kotlin · Lua · Swift · Dart
 //!
 //! Capture name convention:
-//!   @name  — the identifier node (function/class name)
-//!   @def   — the full definition node (for line ranges + signature)
-//!   @call  — the call site node
+//!   @name  - the identifier node (function/class name)
+//!   @def   - the full definition node (for line ranges + signature)
+//!   @call  - the call site node
 //!   Pattern order in def_query → cfg.kinds[pattern_index]
 //!
-//! PATTERN_DECISION: Level 3 (HOF + dispatch map — ext → LangConfig)
+//! PATTERN_DECISION: Level 3 (HOF + dispatch map - ext → LangConfig)
 
 use tree_sitter::Language;
 #[cfg(any(feature = "kotlin", feature = "swift", feature = "dart"))]
@@ -56,7 +56,7 @@ pub fn lang_for_extension(ext: &str) -> Option<&'static str> {
         "rs"                            => Some("rust"),
         // TypeScript (pure TS, no JSX)
         "ts" | "mts" | "cts"           => Some("typescript"),
-        // TSX / JSX — uses separate grammar with JSX support
+        // TSX / JSX - uses separate grammar with JSX support
         "tsx" | "jsx" | "js" | "mjs" | "cjs" => Some("tsx"),
         // Python
         "py" | "pyi"                    => Some("python"),
@@ -228,7 +228,7 @@ const RUST_CALL_QUERY: &str = r#"
 "#;
 
 // =============================================================================
-// TypeScript (pure .ts files — LANGUAGE_TYPESCRIPT, no JSX)
+// TypeScript (pure .ts files - LANGUAGE_TYPESCRIPT, no JSX)
 // =============================================================================
 // A3 fix: class_declaration and interface_declaration use type_identifier (not identifier)
 // in tree-sitter-typescript >= 0.23. Using identifier causes "Impossible pattern" error.
@@ -248,7 +248,7 @@ const TS_CALL_QUERY: &str = r#"
 "#;
 
 // =============================================================================
-// TSX / JSX (.tsx, .jsx, .js — LANGUAGE_TSX, JSX-aware grammar)
+// TSX / JSX (.tsx, .jsx, .js - LANGUAGE_TSX, JSX-aware grammar)
 // =============================================================================
 // A2 fix: TSX grammar does NOT have a bare `function` node type.
 // Use `arrow_function` and `function_expression` instead.
@@ -311,7 +311,7 @@ const C_CALL_QUERY: &str = r#"
 "#;
 
 // =============================================================================
-// C++  (proper grammar — handles templates, classes, namespaces)
+// C++  (proper grammar - handles templates, classes, namespaces)
 // =============================================================================
 const CPP_DEF_QUERY: &str = r#"
 (function_definition declarator: (function_declarator declarator: (identifier) @name)) @def

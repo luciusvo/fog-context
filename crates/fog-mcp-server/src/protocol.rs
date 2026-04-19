@@ -2,7 +2,7 @@
 //!
 //! MCP (Model Context Protocol) JSON-RPC 2.0 type definitions.
 //!
-//! MCP is pure JSON-RPC 2.0 over stdio — no SDK required.
+//! MCP is pure JSON-RPC 2.0 over stdio - no SDK required.
 //! All types needed to decode requests and encode responses are defined here.
 //!
 //! Spec: https://spec.modelcontextprotocol.io/specification/
@@ -66,7 +66,7 @@ pub const ERR_INTERNAL:    i32 = -32603;
 // MCP tool result types
 // ---------------------------------------------------------------------------
 
-/// `tools/call` result — wraps content + isError flag.
+/// `tools/call` result - wraps content + isError flag.
 #[derive(Debug, Serialize)]
 pub struct ToolCallResult {
     pub content: Vec<TextContent>,

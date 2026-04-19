@@ -26,7 +26,7 @@ pub enum Role {
     Tool,
 }
 
-/// Content of a message — text or tool result.
+/// Content of a message - text or tool result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum MessageContent {

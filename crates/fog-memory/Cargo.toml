@@ -1,6 +1,6 @@
 [package]
 name        = "fog-memory"
-description = "SQLite persistence layer for fog-context — 5-layer knowledge graph"
+description = "SQLite persistence layer for fog-context - 5-layer knowledge graph"
 version.workspace    = true
 edition.workspace    = true
 rust-version.workspace = true

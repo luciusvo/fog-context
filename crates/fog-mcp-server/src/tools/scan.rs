@@ -1,4 +1,4 @@
-//! fog_scan — index or re-index the codebase using Tree-sitter.
+//! fog_scan - index or re-index the codebase using Tree-sitter.
 //! Replaces: index (fog-context TS)
 
 use std::path::Path;
@@ -12,7 +12,7 @@ pub fn definition() -> ToolDef {
         name: "fog_scan",
         description: "Index or re-index the codebase using Tree-sitter AST parsing. \
             Extracts symbols (functions, structs, classes, enums) and call graph edges. \
-            Incremental by default — only re-parses changed files (uses XXH3 checksums). \
+            Incremental by default - only re-parses changed files (uses XXH3 checksums). \
             Run once before using other tools, or after large code changes. \
             Use 'full=true' to force complete re-index.",
         input_schema: json!({

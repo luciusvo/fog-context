@@ -1,6 +1,6 @@
-//! fog_outline — token-efficient file/directory structure outline.
+//! fog_outline - token-efficient file/directory structure outline.
 //! Replaces: skeleton
-//! Note: Phase 4A stub — full impl in Phase 4B when indexer is ported.
+//! Note: Phase 4A stub - full impl in Phase 4B when indexer is ported.
 
 use fog_memory::MemoryDb;
 use serde_json::{json, Value};
@@ -10,7 +10,7 @@ pub use crate::protocol::ToolDef;
 pub fn definition() -> ToolDef {
     ToolDef {
         name: "fog_outline",
-        description: "Get a lightweight code outline for a file or directory — symbol names, kinds, \
+        description: "Get a lightweight code outline for a file or directory - symbol names, kinds, \
             signatures, and line ranges. ~10x more token-efficient than reading full source files. \
             USE THIS instead of reading files to understand what a module contains.",
         input_schema: json!({
@@ -33,11 +33,11 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
         _ => return ToolCallResult::err("fog_outline: 'path' is required"),
     };
 
-    // E5: Root path gives 0 results — explain clearly instead of misleading "not indexed" error
+    // E5: Root path gives 0 results - explain clearly instead of misleading "not indexed" error
     let is_root = matches!(path, "." | "./" | "/" | "");
     if is_root {
         return ToolCallResult::ok(
-            "⚠️  fog_outline does not support root directory — it would return too many symbols.\n\
+            "⚠️  fog_outline does not support root directory - it would return too many symbols.\n\
              Specify a file or subdirectory instead:\n\
              ```\n\
              fog_outline({ \"path\": \"src/\" })          ← outline a directory\n\
@@ -62,7 +62,7 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
                     "No symbols found in '{path}'.\n\
                      Check that:\n\
                      1. The path is correct (relative to project root)\n\
-                     2. The project is indexed — run fog_scan if unsure\n\
+                     2. The project is indexed - run fog_scan if unsure\n\
                      3. The file type is supported\n\
                      Try fog_lookup to search by symbol name instead."
                 ));

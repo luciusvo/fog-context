@@ -1,10 +1,10 @@
-//! fog_add_constraint — Push-based Layer 3 constraint injection.
+//! fog_add_constraint - Push-based Layer 3 constraint injection.
 //!
 //! Allows AI agents to directly insert architecture constraints into the DB
 //! without needing to create and scan ADR files. The agent reads any source
 //! (issue, PR, Notion doc, YAML) and calls this tool with the extracted rule.
 //!
-//! Complements fog_constraints (file-scan based) — both write to the same table.
+//! Complements fog_constraints (file-scan based) - both write to the same table.
 
 use fog_memory::MemoryDb;
 use serde_json::{json, Value};
@@ -62,7 +62,7 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
              - **Code:** `{code}`\n\
              - **Severity:** {severity}\n\
              - **Rule:** {statement}\n\n\
-             Verify with fog_brief({{}}) — check Constraints (L3) count."
+             Verify with fog_brief({{}}) - check Constraints (L3) count."
         )),
         Err(e) => ToolCallResult::err(format!("fog_add_constraint error: {e}")),
     }

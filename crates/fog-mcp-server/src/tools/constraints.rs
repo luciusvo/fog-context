@@ -1,6 +1,6 @@
-//! fog_constraints — load ADR files into the constraint layer.
+//! fog_constraints - load ADR files into the constraint layer.
 //! Replaces: ingest_adrs
-//! Phase 4A: stub — ingest_adrs lives in write.rs (to be added in Phase 4B).
+//! Phase 4A: stub - ingest_adrs lives in write.rs (to be added in Phase 4B).
 
 use fog_memory::MemoryDb;
 use serde_json::{json, Value};
@@ -31,13 +31,13 @@ pub fn definition() -> ToolDef {
 }
 
 pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> ToolCallResult {
-    // E6: init mode — bootstrap Layer 3 by creating template ADR directory + file
+    // E6: init mode - bootstrap Layer 3 by creating template ADR directory + file
     if args["init"].as_bool().unwrap_or(false) {
         return handle_init(project_root);
     }
 
     // C2 fix: Search multiple ADR locations, not just logs/decisions.
-    // Priority order: explicit arg > .fog.yml > common convention paths
+    // Priority order: explicit arg > .fog-context/config.toml > .fog.yml > common convention paths
     let default_paths = vec![
         "logs/decisions",
         "docs/decisions",
@@ -49,17 +49,18 @@ pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> To
         "adr",
     ];
 
-    // Check for .fog.yml with custom adr_paths
-    let fog_yml_paths = read_fog_yml_adr_paths(project_root);
+    // F1: Use centralized ADR path loading (reads config.toml first, then .fog.yml)
+    let config_paths = crate::registry::load_project_adr_paths(project_root);
 
     let search_paths: Vec<std::path::PathBuf> = if let Some(p) = args["path"].as_str() {
         // Explicit override
         vec![project_root.join(p)]
-    } else if !fog_yml_paths.is_empty() {
-        fog_yml_paths.iter().map(|p| project_root.join(p)).collect()
+    } else if !config_paths.is_empty() {
+        config_paths.iter().map(|p| project_root.join(p)).collect()
     } else {
         default_paths.iter().map(|p| project_root.join(p)).collect()
     };
+
 
     let existing: Vec<_> = search_paths.iter().filter(|p| p.exists()).collect();
 
@@ -213,7 +214,7 @@ fn handle_init(project_root: &std::path::Path) -> ToolCallResult {
         "✅ fog_constraints init complete!\n\
          Created: {}\n\n\
          Next steps:\n\
-         1. Edit {} — replace EXAMPLE_CONSTRAINT with your rules\n\
+         1. Edit {} - replace EXAMPLE_CONSTRAINT with your rules\n\
          2. Run fog_constraints({{}}) to load them into Layer 3\n\
          3. Run fog_brief({{}}) to verify constraints count > 0",
         adr_dir.display(),

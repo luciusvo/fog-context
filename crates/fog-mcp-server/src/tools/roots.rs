@@ -1,4 +1,4 @@
-//! fog_roots — list registered workspaces/projects.
+//! fog_roots - list registered workspaces/projects.
 //!
 //! Replaces: list_repos
 //! Returns all projects in the global registry with their indexing status.

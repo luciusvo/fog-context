@@ -1,4 +1,4 @@
-//! fog_gaps — graph analysis: find cycles, orphans, communities.
+//! fog_gaps - graph analysis: find cycles, orphans, communities.
 //! Replaces: graph_query
 
 use fog_memory::MemoryDb;
@@ -56,7 +56,7 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
         Ok(results) => {
             let mut lines = vec![format!("# fog_gaps: {template}\n")];
             if results.is_empty() {
-                lines.push(format!("✅ No issues found for '{template}' — graph looks clean."));
+                lines.push(format!("✅ No issues found for '{template}' - graph looks clean."));
             } else {
                 lines.push(format!("Found {} result(s):\n", results.len()));
                 for r in &results {

@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-/// FoG escalation status — signals the system's constraint layer is active.
+/// FoG escalation status - signals the system's constraint layer is active.
 ///
 /// These are NOT failures in the traditional sense. They are signals that
 /// the AI has reached a boundary and needs human intervention.
@@ -65,7 +65,7 @@ pub enum FogError {
     #[error("MCP error: {0}")]
     Mcp(String),
 
-    #[error("Tool execution error: {tool} — {reason}")]
+    #[error("Tool execution error: {tool} - {reason}")]
     ToolExecution { tool: String, reason: String },
 
     #[error("Configuration error: {0}")]

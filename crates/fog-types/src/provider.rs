@@ -1,4 +1,4 @@
-//! Provider traits — abstract interfaces for LLM access.
+//! Provider traits - abstract interfaces for LLM access.
 //!
 //! These traits live in fog-types (Ring 0) so that inner layers (fog-harness)
 //! can depend on the abstraction without importing the implementation (fog-llm).
@@ -19,7 +19,7 @@ use crate::llm::{CompletionRequest, CompletionResponse, ModelInfo, StreamChunk};
 /// Error type for LLM operations.
 #[derive(Debug, thiserror::Error)]
 pub enum LlmError {
-    #[error("API error: {status} — {message}")]
+    #[error("API error: {status} - {message}")]
     Api { status: u16, message: String },
 
     #[error("Network error: {0}")]
@@ -42,10 +42,10 @@ pub enum LlmError {
 }
 
 // ---------------------------------------------------------------------------
-// LlmProvider — single-model raw access
+// LlmProvider - single-model raw access
 // ---------------------------------------------------------------------------
 
-/// Universal trait — every LLM provider must implement this.
+/// Universal trait - every LLM provider must implement this.
 ///
 /// Consumers interact with LLMs exclusively through this interface,
 /// enabling hot-swap between providers without code changes.
@@ -76,7 +76,7 @@ pub trait LlmProvider: Send + Sync {
 }
 
 // ---------------------------------------------------------------------------
-// GatewayService — production gateway abstraction
+// GatewayService - production gateway abstraction
 // ---------------------------------------------------------------------------
 
 /// What the orchestration layer (fog-harness) needs from the LLM gateway.
@@ -113,12 +113,12 @@ pub trait GatewayService: Send + Sync {
 }
 
 // ---------------------------------------------------------------------------
-// GatewayUsageReport — the report type harness can use
+// GatewayUsageReport - the report type harness can use
 // ---------------------------------------------------------------------------
 
 /// Usage report from the gateway, visible to inner layers.
 ///
-/// This is the "output" type of GatewayService — inner layers can read usage
+/// This is the "output" type of GatewayService - inner layers can read usage
 /// data without knowing how the gateway tracks it internally.
 #[derive(Debug, Clone, Default)]
 pub struct GatewayUsageReport {

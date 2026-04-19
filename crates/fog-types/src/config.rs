@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-/// Root configuration — deserialized from `.fog-autoide.toml`.
+/// Root configuration - deserialized from `.fog-autoide.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FogConfig {
     pub project: ProjectConfig,
@@ -79,7 +79,7 @@ pub struct LanguageConfig {
 // LLM Configuration (Smart API Gateway)
 // ===========================================================================
 
-/// LLM provider settings — multi-provider, multi-account Smart API Gateway.
+/// LLM provider settings - multi-provider, multi-account Smart API Gateway.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmConfig {
     /// Default model in "provider/model" format (e.g., "gemini/gemini-2.5-flash").
@@ -122,7 +122,7 @@ pub struct ProviderConfig {
     /// Inferred from provider name if not specified.
     #[serde(default)]
     pub api_format: Option<String>,
-    /// Account pool — multiple API keys for quota rotation.
+    /// Account pool - multiple API keys for quota rotation.
     #[serde(default)]
     pub accounts: Vec<AccountConfig>,
     /// Models available under this provider.
@@ -144,7 +144,7 @@ impl ProviderConfig {
                 priority: 1,
             }]
         } else {
-            // Local provider — no API key needed
+            // Local provider - no API key needed
             vec![AccountConfig {
                 name: "local".into(),
                 api_key_env: String::new(),
@@ -245,7 +245,7 @@ pub struct AdvisorConfig {
 // Request Context (tracking dimensions)
 // ===========================================================================
 
-/// Context for each LLM request — carries tracking metadata through the SAG.
+/// Context for each LLM request - carries tracking metadata through the SAG.
 #[derive(Debug, Clone, Default)]
 pub struct RequestContext {
     /// Session ID (one `fog task` invocation).

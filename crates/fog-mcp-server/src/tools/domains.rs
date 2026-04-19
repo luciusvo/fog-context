@@ -1,4 +1,4 @@
-//! fog_domains — business domain catalog + query (merged tool).
+//! fog_domains - business domain catalog + query (merged tool).
 //! Replaces: domain_catalog + query_domain
 
 use fog_memory::MemoryDb;
@@ -37,7 +37,7 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
                 if !info.symbols.is_empty() {
                     lines.push(format!("\n## Symbols ({} functions)", info.symbols.len()));
                     for s in &info.symbols {
-                        lines.push(format!("- `{}` [{}] — {}", s.name, s.kind, s.file));
+                        lines.push(format!("- `{}` [{}] - {}", s.name, s.kind, s.file));
                     }
                 }
                 if !info.constraints.is_empty() {

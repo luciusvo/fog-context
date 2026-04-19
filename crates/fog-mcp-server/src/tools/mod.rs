@@ -1,7 +1,7 @@
 //! fog-mcp-server/src/tools/mod.rs
 //!
 //! 15 fog-context v0.5.5 tool handlers.
-//! Each tool delegates its DB work to fog-memory — NO direct SQL here.
+//! Each tool delegates its DB work to fog-memory - NO direct SQL here.
 //!
 //! ## Tool Inventory
 //!

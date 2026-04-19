@@ -1,6 +1,6 @@
 [package]
 name        = "fog-mcp-server"
-description = "fog-context MCP server — 14-tool codebase intelligence engine"
+description = "fog-context MCP server - 14-tool codebase intelligence engine"
 version.workspace    = true
 edition.workspace    = true
 rust-version.workspace = true

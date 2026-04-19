@@ -1,6 +1,6 @@
 //! fog-mcp-server/src/router.rs
 //!
-//! Tool dispatcher — maps tool names to handlers.
+//! Tool dispatcher - maps tool names to handlers.
 //! Returns ToolDef list for `tools/list` and dispatches `tools/call`.
 //!
 //! PATTERN_DECISION: Level 3 (HOF + Dict Map)
@@ -64,7 +64,7 @@ pub fn dispatch(
         "fog_scan"    => tools::scan::handle(args, &db_guard, project_root),
         "fog_import"  => tools::import::handle(args, &db_guard, project_root),
 
-        "fog_brief"       => tools::brief::handle(args, &db_guard, registry),
+        "fog_brief"       => tools::brief::handle(args, &db_guard, registry, project_root),
         "fog_lookup"      => tools::lookup::handle(args, &db_guard),
         "fog_outline"     => tools::outline::handle(args, &db_guard),
         "fog_inspect"     => tools::inspect::handle(args, &db_guard),

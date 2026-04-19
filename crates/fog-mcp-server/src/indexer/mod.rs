@@ -3,9 +3,9 @@
 //! Phase 4B: Tree-sitter-powered incremental codebase indexer.
 //!
 //! Two-pass strategy (mirrors TypeScript fog-context-repo):
-//!   Pass 1 — Walk files, parse AST, extract symbols + intra-file edges.
+//!   Pass 1 - Walk files, parse AST, extract symbols + intra-file edges.
 //!             Store unresolved cross-file calls in a deferred queue.
-//!   Pass 2 — Resolve deferred calls against the full symbol index.
+//!   Pass 2 - Resolve deferred calls against the full symbol index.
 //!             Insert cross-file CALLS edges with confidence scores.
 //!
 //! PATTERN_DECISION: Level 2 (Composition)
@@ -78,7 +78,7 @@ pub fn run_scan(
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| "unknown".into());
         let path = project_root.to_string_lossy().into_owned();
-        // Query actual total from DB — incremental scan may have symbols_created=0
+        // Query actual total from DB - incremental scan may have symbols_created=0
         let total_symbols = db.total_symbols();
         let mut reg = Registry::load();
         reg.upsert(name, path, total_symbols);
@@ -90,7 +90,7 @@ pub fn run_scan(
         String::new()
     } else {
         format!(
-            "\n\n> [!WARNING]\n> **Parser errors** — the following languages may have 0 symbols:\n{}",
+            "\n\n> [!WARNING]\n> **Parser errors** - the following languages may have 0 symbols:\n{}",
             stats.query_errors.iter().map(|e| format!("> - `{e}`")).collect::<Vec<_>>().join("\n")
         )
     };
