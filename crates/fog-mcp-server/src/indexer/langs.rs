@@ -433,11 +433,10 @@ const SWIFT_DEF_QUERY: &str = r#"
 (class_declaration name: (type_identifier) @name) @def
 (protocol_declaration name: (type_identifier) @name) @def
 (function_declaration name: (simple_identifier) @name) @def
-(struct_declaration name: (type_identifier) @name) @def
 (enum_declaration name: (type_identifier) @name) @def
 "#;
 #[cfg(feature = "swift")]
-const SWIFT_KINDS: &[&str] = &["class","protocol","function","struct","enum"];
+const SWIFT_KINDS: &[&str] = &["class","protocol","function","enum"];
 #[cfg(feature = "swift")]
 const SWIFT_CALL_QUERY: &str = r#"
 (call_expression function: (simple_identifier) @name) @call

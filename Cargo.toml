@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version     = "0.5.6"
+version     = "0.5.7"
 edition     = "2021"
 rust-version = "1.75"
 license     = "MIT"
@@ -33,11 +33,12 @@ async-trait = "0.1"
 rusqlite   = { version = "0.32", features = ["bundled", "vtab"] }
 
 # Tree-sitter (12 native languages)
-tree-sitter             = "0.24"
-tree-sitter-rust        = "0.23"
+# 0.25+ required for ABI 15 support (Dart grammar uses ABI 15)
+tree-sitter             = "0.25"
+tree-sitter-rust        = "0.24"
 tree-sitter-typescript  = "0.23"
-tree-sitter-python      = "0.23"
-tree-sitter-go          = "0.23"
+tree-sitter-python      = "0.25"
+tree-sitter-go          = "0.25"
 tree-sitter-c           = "0.24"
 tree-sitter-cpp         = "0.23"
 tree-sitter-java        = "0.23"
