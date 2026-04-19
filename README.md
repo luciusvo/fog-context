@@ -1,6 +1,6 @@
 # fog-context - Agentic Codebase Intelligence Engine
 
-> **v0.5.3 - Rust Rewrite** | Zero runtime dependency | <5ms cold start | 14 MCP Tools
+> **v0.5.7** | Zero runtime dependency | <5ms cold start | 15 MCP Tools | Rust
 
 fog-context is a **dual-mode binary** that serves as the memory backbone for AI agents working on large codebases. It provides a 5-layer knowledge graph via the Model Context Protocol (MCP), integrating with Cursor, Cline, Claude Desktop, and Zed.
 
@@ -362,14 +362,9 @@ Layer 5: HARNESS      ← fog_brief (session state + staleness detection)
 
 ---
 
-## CI/CD Integration
+## Changelog
 
-The GitHub Actions workflow at `.github/workflows/release.yml` automatically builds binaries for all platforms when a version tag is pushed:
-
-```bash
-git tag v0.5.4
-git push origin --tags   # Triggers release build for Linux/macOS/Windows
-```
+See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
 
 ---
 
