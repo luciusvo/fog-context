@@ -20,6 +20,10 @@ pub struct RepoEntry {
     /// Survives folder renames and path changes.
     #[serde(default)]
     pub fog_id: Option<String>,
+    /// Grammar parse errors from the last fog_scan. Empty = all languages OK.
+    /// Stored so fog_brief can surface them without re-scanning.
+    #[serde(default)]
+    pub grammar_warnings: Vec<String>,
 }
 
 /// The project registry — loaded from disk on startup.
@@ -50,16 +54,54 @@ impl Registry {
         &self.entries
     }
 
-    /// Find a project by fog_id (stable UUID), path, or name.
-    /// fog_id is checked first to support folder renames.
+    /// Find a project by fog_id, path, name, or fuzzy name/path-segment.
+    /// Returns None if no match OR if fuzzy tier matches multiple entries (ambiguous).
+    /// Priority: UUID > exact path > exact name > path suffix > name-contains > path-segment
     pub fn find(&self, key: &str) -> Option<&RepoEntry> {
-        // Priority: UUID > exact path > name match > path suffix
-        self.entries.iter().find(|e| {
-            e.fog_id.as_deref() == Some(key)
-                || e.path == key
-                || e.name == key
-                || e.path.ends_with(key)
-        })
+        // Tier 1: fog_id exact
+        if let Some(e) = self.entries.iter().find(|e| e.fog_id.as_deref() == Some(key)) {
+            return Some(e);
+        }
+        // Tier 2: path exact
+        if let Some(e) = self.entries.iter().find(|e| e.path == key) {
+            return Some(e);
+        }
+        // Tier 3: name exact
+        if let Some(e) = self.entries.iter().find(|e| e.name == key) {
+            return Some(e);
+        }
+        // Tier 4: path ends_with (legacy suffix match)
+        if let Some(e) = self.entries.iter().find(|e| e.path.ends_with(key)) {
+            return Some(e);
+        }
+        // Tier 5: case-insensitive name contains — must be UNIQUE
+        let key_lower = key.to_lowercase();
+        let name_matches: Vec<_> = self.entries.iter()
+            .filter(|e| e.name.to_lowercase().contains(&key_lower))
+            .collect();
+        match name_matches.len() {
+            1 => return Some(name_matches[0]),
+            0 => {}
+            _ => return None, // ambiguous — caller should ESCALATE
+        }
+        // Tier 6: path last segment contains — must be UNIQUE
+        let seg_matches: Vec<_> = self.entries.iter()
+            .filter(|e| {
+                std::path::Path::new(&e.path)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_lowercase().contains(&key_lower))
+                    .unwrap_or(false)
+            })
+            .collect();
+        match seg_matches.len() {
+            1 => Some(seg_matches[0]),
+            _ => None,
+        }
+    }
+
+    /// Return all registered project names (for fail-loud error messages).
+    pub fn list_names(&self) -> Vec<String> {
+        self.entries.iter().map(|e| e.name.clone()).collect()
     }
 
     /// Upsert a project into the registry (create if new, update if exists).
@@ -85,6 +127,38 @@ impl Registry {
                 last_indexed: Some(now),
                 db_path: Some(format!("{}/.fog-context/context.db", path)),
                 fog_id: Some(fog_id),
+                grammar_warnings: vec![],
+            });
+        }
+        self.save();
+    }
+
+    /// Upsert with grammar warnings from the last scan.
+    pub fn upsert_with_warnings(
+        &mut self,
+        name: String,
+        path: String,
+        symbol_count: u64,
+        grammar_warnings: Vec<String>,
+    ) {
+        let fog_id = ensure_project_id(&path);
+        let now = chrono_now();
+        if let Some(entry) = self.entries.iter_mut().find(|e| {
+            e.fog_id.as_deref() == Some(&fog_id) || e.path == path
+        }) {
+            entry.symbol_count = Some(symbol_count);
+            entry.last_indexed = Some(now);
+            entry.fog_id = Some(fog_id);
+            entry.grammar_warnings = grammar_warnings;
+        } else {
+            self.entries.push(RepoEntry {
+                name,
+                path: path.clone(),
+                symbol_count: Some(symbol_count),
+                last_indexed: Some(now),
+                db_path: Some(format!("{}/.fog-context/context.db", path)),
+                fog_id: Some(fog_id),
+                grammar_warnings,
             });
         }
         self.save();

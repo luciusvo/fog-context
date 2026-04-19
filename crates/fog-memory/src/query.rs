@@ -282,6 +282,127 @@ impl MemoryDb {
         }))
     }
 
+    // #8: Symbol collision helpers
+
+    /// Count how many symbols share the given name (for disambiguation logic).
+    pub fn count_symbols_by_name(&self, name: &str) -> MemoryResult<usize> {
+        let conn = self.conn();
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM symbols WHERE name = ?1",
+            rusqlite::params![name],
+            |row| row.get(0),
+        ).map_err(crate::MemoryError::Database)?;
+        Ok(count as usize)
+    }
+
+    /// List (file_path, start_line) pairs for every symbol sharing this name.
+    pub fn list_symbols_by_name(&self, name: &str) -> MemoryResult<Vec<(String, i64)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT f.path, s.start_line FROM symbols s
+             JOIN files f ON f.id = s.file_id
+             WHERE s.name = ?1
+             ORDER BY f.path, s.start_line",
+        ).map_err(crate::MemoryError::Database)?;
+        let pairs = stmt.query_map(rusqlite::params![name], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        }).map_err(crate::MemoryError::Database)?.flatten().collect();
+        Ok(pairs)
+    }
+
+    /// Like context_symbol() but filter by file path when name is ambiguous.
+    pub fn context_symbol_with_file(
+        &self,
+        name: &str,
+        file_hint: Option<&str>,
+    ) -> MemoryResult<Option<SymbolContext>> {
+        let conn = self.conn();
+
+        let sql = if file_hint.is_some() {
+            "SELECT s.id, s.name, s.kind, f.path, s.start_line, s.signature, s.doc
+             FROM symbols s JOIN files f ON f.id = s.file_id
+             WHERE s.name = ?1 AND (f.path = ?2 OR f.path LIKE ?3)
+             ORDER BY s.id LIMIT 1"
+        } else {
+            "SELECT s.id, s.name, s.kind, f.path, s.start_line, s.signature, s.doc
+             FROM symbols s JOIN files f ON f.id = s.file_id
+             WHERE s.name = ?1
+             ORDER BY s.id LIMIT 1"
+        };
+
+        let file_glob = file_hint.map(|f| format!("%{f}%")).unwrap_or_default();
+        let file_val = file_hint.unwrap_or("");
+
+        let symbol: Option<(i64, String, String, String, i64, Option<String>, Option<String>)> =
+            conn.query_row(
+                sql,
+                rusqlite::params![name, file_val, file_glob],
+                |row| Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                )),
+            ).optional().map_err(crate::MemoryError::Database)?;
+
+        let (sym_id, sym_name, sym_kind, sym_file, start_line, signature, doc) = match symbol {
+            Some(s) => s,
+            None => return Ok(None),
+        };
+
+        let callers = self.fetch_edge_refs(sym_id, "upstream")?;
+        let callees = self.fetch_edge_refs(sym_id, "downstream")?;
+
+        let mut decisions_stmt = conn.prepare(
+            "SELECT id, reason, revert_risk, status, created_at FROM decisions
+             WHERE functions LIKE ?1 ORDER BY created_at DESC LIMIT 10",
+        ).map_err(crate::MemoryError::Database)?;
+        let decisions = decisions_stmt.query_map(
+            rusqlite::params![format!("%\"{name}\"%")],
+            |row| Ok(DecisionRef {
+                id: row.get(0)?,
+                reason: row.get(1)?,
+                revert_risk: row.get(2)?,
+                status: row.get(3)?,
+                created_at: row.get(4)?,
+            }),
+        ).map_err(crate::MemoryError::Database)?.flatten().collect();
+
+        // Constraints + HINT_ entries from Layer 3
+        let mut constraints_stmt = conn.prepare(
+            "SELECT DISTINCT c.code, c.severity, c.statement
+             FROM constraints c
+             LEFT JOIN domain_symbols ds ON ds.domain_id = c.domain_id
+             WHERE ds.symbol_id = ?1 OR ds.symbol_name = ?2
+                OR c.code LIKE 'HINT_%'
+             ORDER BY c.code",
+        ).map_err(crate::MemoryError::Database)?;
+        let constraints = constraints_stmt.query_map(
+            rusqlite::params![sym_id, name],
+            |row| Ok(ConstraintRef {
+                code: row.get(0)?,
+                severity: row.get(1)?,
+                statement: row.get(2)?,
+            }),
+        ).map_err(crate::MemoryError::Database)?.flatten().collect();
+
+        Ok(Some(SymbolContext {
+            name: sym_name,
+            kind: sym_kind,
+            file: sym_file,
+            start_line,
+            signature,
+            doc,
+            callers,
+            callees,
+            decisions,
+            constraints,
+        }))
+    }
+
     fn fetch_edge_refs(&self, sym_id: i64, direction: &str) -> MemoryResult<Vec<EdgeRef>> {
         let sql = if direction == "upstream" {
             // Who calls sym_id
@@ -679,6 +800,56 @@ impl MemoryDb {
 
         let all: Vec<SearchHit> = stmt
             .query_map(rusqlite::params![path, prefix_glob], hit_map)
+            .map_err(crate::MemoryError::Database)?
+            .flatten()
+            .collect();
+
+        let hits: Vec<SearchHit> = if let Some(k) = kind {
+            all.into_iter().filter(|s| s.kind == k).take(max_symbols).collect()
+        } else {
+            all.into_iter().take(max_symbols).collect()
+        };
+
+        Ok(hits)
+    }
+
+    /// #9: Fuzzy skeleton — partial/suffix path match.
+    /// Falls back to `WHERE f.path LIKE '%path%'` when exact/prefix match returns nothing.
+    pub fn skeleton_fuzzy(
+        &self,
+        path: &str,
+        max_symbols: usize,
+        kind: Option<&str>,
+        _include_docs: bool,
+    ) -> MemoryResult<Vec<SearchHit>> {
+        let conn = self.conn();
+        let fuzzy_glob = format!("%{path}%");
+
+        let base_sql = format!(
+            "SELECT s.name, s.kind, f.path, s.start_line, s.end_line,
+                    s.signature, s.doc
+             FROM symbols s
+             JOIN files f ON f.id = s.file_id
+             WHERE f.path LIKE ?1
+             ORDER BY LENGTH(f.path), s.start_line
+             LIMIT {}",
+            max_symbols * 4,
+        );
+
+        let mut stmt = conn.prepare(&base_sql).map_err(crate::MemoryError::Database)?;
+        let hit_map = |row: &rusqlite::Row<'_>| Ok(SearchHit {
+            name: row.get(0)?,
+            kind: row.get(1)?,
+            file: row.get(2)?,
+            start_line: row.get(3)?,
+            end_line: row.get(4)?,
+            signature: row.get(5)?,
+            doc_snippet: row.get(6)?,
+            relevance: 0.8, // lower relevance: fuzzy match
+        });
+
+        let all: Vec<SearchHit> = stmt
+            .query_map(rusqlite::params![fuzzy_glob], hit_map)
             .map_err(crate::MemoryError::Database)?
             .flatten()
             .collect();

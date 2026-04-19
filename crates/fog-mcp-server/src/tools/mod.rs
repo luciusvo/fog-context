@@ -1,6 +1,6 @@
 //! fog-mcp-server/src/tools/mod.rs
 //!
-//! 15 fog-context v0.5.5 tool handlers.
+//! 14 fog-context tool handlers.
 //! Each tool delegates its DB work to fog-memory - NO direct SQL here.
 //!
 //! ## Tool Inventory
@@ -18,11 +18,10 @@
 //! | fog_gaps          | graph_query      | Advanced |
 //! | fog_domains       | domain_catalog + query_domain | Advanced |
 //! | fog_assign        | define_domain    | Advanced |
-//! | fog_constraints   | ingest_adrs      | Advanced |
+//! | fog_constraints   | ingest_adrs + inline inject  | Advanced |
 //! | fog_decisions     | record_decision  | Advanced |
 //! | fog_import        | NEW: BRV+GitNexus L2/L3/L4 pump | Advanced |
 
-pub mod add_constraint;
 pub mod assign;
 pub mod brief;
 pub mod decisions;
@@ -37,4 +36,3 @@ pub mod roots;
 pub mod scan;
 pub mod trace;
 pub mod constraints;
-

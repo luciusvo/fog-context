@@ -17,7 +17,7 @@ use crate::protocol::{ToolCallResult, ToolDef};
 use crate::registry::Registry;
 use crate::tools;
 
-/// Generate the list of all 15 tools for `tools/list`.
+/// Generate the list of all 14 tools for `tools/list`.
 pub fn list_tools() -> Vec<ToolDef> {
     vec![
         // ── Core (8) ────────────────────────────────────────────────────────────
@@ -29,12 +29,11 @@ pub fn list_tools() -> Vec<ToolDef> {
         tools::inspect::definition(),
         tools::impact::definition(),
         tools::trace::definition(),
-        // ── Advanced (7) ────────────────────────────────────────────────────────
+        // ── Advanced (6) ────────────────────────────────────────────────────────
         tools::gaps::definition(),
         tools::domains::definition(),
         tools::assign::definition(),
         tools::constraints::definition(),
-        tools::add_constraint::definition(),
         tools::decisions::definition(),
         tools::import::definition(),
     ]
@@ -67,14 +66,13 @@ pub fn dispatch(
         "fog_brief"       => tools::brief::handle(args, &db_guard, registry, project_root),
         "fog_lookup"      => tools::lookup::handle(args, &db_guard),
         "fog_outline"     => tools::outline::handle(args, &db_guard),
-        "fog_inspect"     => tools::inspect::handle(args, &db_guard),
-        "fog_impact"      => tools::impact::handle(args, &db_guard),
+        "fog_inspect"     => tools::inspect::handle(args, &db_guard, project_root),
+        "fog_impact"      => tools::impact::handle(args, &db_guard, project_root),
         "fog_trace"       => tools::trace::handle(args, &db_guard),
         "fog_gaps"            => tools::gaps::handle(args, &db_guard),
         "fog_domains"         => tools::domains::handle(args, &db_guard),
         "fog_assign"          => tools::assign::handle(args, &db_guard),
         "fog_constraints"     => tools::constraints::handle(args, &db_guard, project_root),
-        "fog_add_constraint"  => tools::add_constraint::handle(args, &db_guard),
         "fog_decisions"       => tools::decisions::handle(args, &db_guard, project_root),
         _ => ToolCallResult::err(format!(
             "Unknown tool: '{tool_name}'. Available: {}",

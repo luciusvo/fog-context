@@ -47,6 +47,14 @@ pub struct LangConfig {
     pub call_query: &'static str,
     /// Symbol kinds by pattern_index (same order as def_query patterns)
     pub kinds: &'static [&'static str],
+    // ── Bridge Query (Approach 1 — built-in framework pattern detection) ──
+    // Captures DI annotations, interface implementations, dynamic imports, etc.
+    // Each capture @name produces a Deferred edge with `bridge_edge_kind`.
+    // None = language has no well-known bridge patterns to detect.
+    pub bridge_query: Option<&'static str>,
+    /// edge_kind string to use for all edges produced by bridge_query.
+    /// e.g. "DI_INJECT", "IMPLEMENTS", "DYNAMIC_IMPORT"
+    pub bridge_edge_kind: &'static str,
 }
 
 /// Map a file extension to a canonical language name.
@@ -97,6 +105,8 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: RUST_DEF_QUERY,
             call_query: RUST_CALL_QUERY,
             kinds: RUST_KINDS,
+            bridge_query: None, // Rust: #[derive] handled via call_query macro captures
+            bridge_edge_kind: "CALLS",
         }),
         "typescript" => Some(LangConfig {
             name: "typescript",
@@ -104,15 +114,17 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: TS_DEF_QUERY,
             call_query: TS_CALL_QUERY,
             kinds: TS_KINDS,
+            bridge_query: Some(TS_BRIDGE_QUERY),
+            bridge_edge_kind: "DYNAMIC_IMPORT",
         }),
-        // TSX / JSX: use LANGUAGE_TSX which understands JSX syntax (<div />, etc.)
-        // Without this, any React component file causes parser ERROR nodes and 0 symbols.
         "tsx" => Some(LangConfig {
             name: "tsx",
             ts_language: tree_sitter_typescript::LANGUAGE_TSX.into(),
             def_query: TSX_DEF_QUERY,
-            call_query: TS_CALL_QUERY,   // call patterns are the same
+            call_query: TS_CALL_QUERY,
             kinds: TSX_KINDS,
+            bridge_query: Some(TS_BRIDGE_QUERY),
+            bridge_edge_kind: "DYNAMIC_IMPORT",
         }),
         "python" => Some(LangConfig {
             name: "python",
@@ -120,6 +132,8 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: PY_DEF_QUERY,
             call_query: PY_CALL_QUERY,
             kinds: PY_KINDS,
+            bridge_query: Some(PY_BRIDGE_QUERY),
+            bridge_edge_kind: "DECORATES",
         }),
         "go" => Some(LangConfig {
             name: "go",
@@ -127,6 +141,8 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: GO_DEF_QUERY,
             call_query: GO_CALL_QUERY,
             kinds: GO_KINDS,
+            bridge_query: None,
+            bridge_edge_kind: "CALLS",
         }),
         "c" => Some(LangConfig {
             name: "c",
@@ -134,14 +150,17 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: C_DEF_QUERY,
             call_query: C_CALL_QUERY,
             kinds: C_KINDS,
+            bridge_query: None, // C macros: handled via hints/c.json
+            bridge_edge_kind: "CALLS",
         }),
         "cpp" => Some(LangConfig {
             name: "cpp",
-            // A3 fix: use proper C++ grammar (not C fallback) to handle class/template syntax
             ts_language: tree_sitter_cpp::LANGUAGE.into(),
             def_query: CPP_DEF_QUERY,
             call_query: CPP_CALL_QUERY,
             kinds: CPP_KINDS,
+            bridge_query: None,
+            bridge_edge_kind: "CALLS",
         }),
         "java" => Some(LangConfig {
             name: "java",
@@ -149,6 +168,8 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: JAVA_DEF_QUERY,
             call_query: JAVA_CALL_QUERY,
             kinds: JAVA_KINDS,
+            bridge_query: Some(JAVA_BRIDGE_QUERY),
+            bridge_edge_kind: "DI_INJECT",
         }),
         "csharp" => Some(LangConfig {
             name: "csharp",
@@ -156,6 +177,8 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: CS_DEF_QUERY,
             call_query: CS_CALL_QUERY,
             kinds: CS_KINDS,
+            bridge_query: None,
+            bridge_edge_kind: "CALLS",
         }),
         "ruby" => Some(LangConfig {
             name: "ruby",
@@ -163,6 +186,8 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: RUBY_DEF_QUERY,
             call_query: RUBY_CALL_QUERY,
             kinds: RUBY_KINDS,
+            bridge_query: None,
+            bridge_edge_kind: "CALLS",
         }),
         "php" => Some(LangConfig {
             name: "php",
@@ -170,6 +195,8 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: PHP_DEF_QUERY,
             call_query: PHP_CALL_QUERY,
             kinds: PHP_KINDS,
+            bridge_query: None,
+            bridge_edge_kind: "CALLS",
         }),
         #[cfg(feature = "kotlin")]
         "kotlin" => Some(LangConfig {
@@ -178,6 +205,8 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: KOTLIN_DEF_QUERY,
             call_query: KOTLIN_CALL_QUERY,
             kinds: KOTLIN_KINDS,
+            bridge_query: None,
+            bridge_edge_kind: "CALLS",
         }),
         #[cfg(feature = "swift")]
         "swift" => Some(LangConfig {
@@ -186,6 +215,8 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: SWIFT_DEF_QUERY,
             call_query: SWIFT_CALL_QUERY,
             kinds: SWIFT_KINDS,
+            bridge_query: None,
+            bridge_edge_kind: "CALLS",
         }),
         #[cfg(feature = "dart")]
         "dart" => Some(LangConfig {
@@ -194,6 +225,8 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: DART_DEF_QUERY,
             call_query: DART_CALL_QUERY,
             kinds: DART_KINDS,
+            bridge_query: None,
+            bridge_edge_kind: "CALLS",
         }),
         "lua" => Some(LangConfig {
             name: "lua",
@@ -201,6 +234,8 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: LUA_DEF_QUERY,
             call_query: LUA_CALL_QUERY,
             kinds: LUA_KINDS,
+            bridge_query: None,
+            bridge_edge_kind: "CALLS",
         }),
         _ => None,
     }
@@ -460,4 +495,42 @@ const DART_KINDS: &[&str] = &["class","mixin","extension","enum","function","met
 #[cfg(feature = "dart")]
 const DART_CALL_QUERY: &str = r#"
 (call_expression function: (identifier) @name) @call
+"#;
+
+// =============================================================================
+// BRIDGE QUERIES (Approach 1 — Built-in framework pattern detection)
+// =============================================================================
+//
+// Captures language-specific patterns missed by def/call queries.
+// Each @name capture → Deferred edge with LangConfig::bridge_edge_kind.
+// Project-specific overrides → .fog-context/hints/{lang}.json (Approach 2).
+// =============================================================================
+
+// Java: @Autowired/@Inject/@Resource annotated fields → DI_INJECT edges
+const JAVA_BRIDGE_QUERY: &str = r#"
+(field_declaration
+  (modifiers (marker_annotation name: (identifier) @_ann))
+  type: (type_identifier) @name)
+(field_declaration
+  (modifiers (annotation name: (identifier) @_ann))
+  type: (type_identifier) @name)
+"#;
+
+// Python: decorator usage → DECORATES edges
+// e.g. @property, @router.get → edge to decorator name
+const PY_BRIDGE_QUERY: &str = r#"
+(decorated_definition
+  (decorator (identifier) @name))
+(decorated_definition
+  (decorator (attribute attribute: (identifier) @name)))
+"#;
+
+// TypeScript/JS: dynamic import() and require() → DYNAMIC_IMPORT edges
+const TS_BRIDGE_QUERY: &str = r#"
+(call_expression
+  function: (import)
+  arguments: (arguments (string (string_fragment) @name)))
+(call_expression
+  function: (identifier) @_fn
+  arguments: (arguments (string (string_fragment) @name)))
 "#;

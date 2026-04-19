@@ -128,6 +128,19 @@ pub fn handle(
                 }
             }
 
+            // #15: Grammar warnings from last scan (stored in registry)
+            let path_str = project_root.to_string_lossy();
+            if let Some(entry) = registry.find(&path_str) {
+                if !entry.grammar_warnings.is_empty() {
+                    lines.push("\n## ⚠️ Grammar Warnings (from last fog_scan)".to_string());
+                    lines.push("> Some languages may have incomplete symbol graphs:".to_string());
+                    for w in &entry.grammar_warnings {
+                        lines.push(format!("> - `{w}`"));
+                    }
+                    lines.push("> Run `fog_scan({})` after updating fog-context to fix.".to_string());
+                }
+            }
+
             ToolCallResult::ok(lines.join("\n"))
         }
         Err(e) => ToolCallResult::err(format!("fog_brief error: {e}")),

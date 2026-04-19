@@ -24,21 +24,42 @@ pub fn handle(_args: &Value, registry: &Registry) -> ToolCallResult {
     let repos = registry.list();
     if repos.is_empty() {
         return ToolCallResult::ok(
-            "No projects registered. Run `fog-mcp-server --project /path/to/project` \
-             or call fog_scan to index a new project."
+            "No projects registered.\n\
+             Run `fog_scan({ \"project\": \"/path/to/project\" })` to index a new project."
         );
     }
 
-    let mut lines = vec!["# Registered Projects\n".to_string()];
+    let active = registry.active_project.as_ref()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default();
+
+    let mut lines = vec![
+        format!("# Registered Projects (fog-context v{})\n", env!("CARGO_PKG_VERSION")),
+        "| Status | Name | Symbols | Last Indexed | fog_id |".to_string(),
+        "|--------|------|---------|--------------|--------|".to_string(),
+    ];
+
+    let mut first = true;
     for repo in repos {
+        let is_default = repo.path == active || (active.is_empty() && first);
+        first = false;
+        let marker = if is_default { "🎯 default" } else { "   ·  " };
+        let fog_id_short = repo.fog_id.as_deref()
+            .map(|id| format!("{}…", &id[..id.len().min(8)]))
+            .unwrap_or_else(|| "-".to_string());
         lines.push(format!(
-            "## {}\n- Path: {}\n- Symbols: {}\n- Last indexed: {}\n",
+            "| {} | **{}** | {} | {} | `{}` |",
+            marker,
             repo.name,
-            repo.path,
             repo.symbol_count.unwrap_or(0),
             repo.last_indexed.as_deref().unwrap_or("never"),
+            fog_id_short,
         ));
     }
+
+    lines.push(String::new());
+    lines.push("**Multi-project tip:** Pass `\"project\": \"<name>\"` to any tool to route to a specific project.".to_string());
+    lines.push("**Fuzzy match:** short names work (\"fog\" matches \"fog-context\") unless ambiguous.".to_string());
 
     ToolCallResult::ok(lines.join("\n"))
 }

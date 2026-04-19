@@ -1,6 +1,6 @@
 # fog-context - Agentic Codebase Intelligence Engine
 
-> **v0.5.7** | Zero runtime dependency | <5ms cold start | 15 MCP Tools | Rust
+> **v0.6.1** | Zero runtime dependency | <5ms cold start | 14 MCP Tools | Rust
 
 fog-context is a **dual-mode binary** that serves as the memory backbone for AI agents working on large codebases. It provides a 5-layer knowledge graph via the Model Context Protocol (MCP), integrating with Cursor, Cline, Claude Desktop, and Zed.
 
@@ -281,7 +281,7 @@ cargo build --release --package fog-mcp-server --features all-langs
 
 ---
 
-## 15 MCP Tools
+## 14 MCP Tools
 
 | Tool | Purpose | Priority |
 |:---|:---|:---|
@@ -296,8 +296,7 @@ cargo build --release --package fog-mcp-server --features all-langs
 | `fog_gaps` | Find orphans, cycles, dead code | Advanced |
 | `fog_domains` | Query business domains and their symbols | Advanced |
 | `fog_assign` | Define/update a business domain | Advanced |
-| `fog_constraints` | Ingest ADR files as architecture constraints (use `init:true` to bootstrap) | Advanced |
-| `fog_add_constraint` | Push a constraint directly into Layer 3 (no ADR file needed) | Advanced |
+| `fog_constraints` | Ingest ADR files AND push inline architecture constraints (Layer 3) | Advanced |
 | `fog_decisions` | Record WHY code was changed (builds causality log) | Advanced |
 | `fog_import` | Migrate from ByteRover / GitNexus to fog-context | Advanced |
 

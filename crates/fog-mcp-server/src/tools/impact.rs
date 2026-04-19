@@ -3,8 +3,11 @@
 
 use fog_memory::MemoryDb;
 use serde_json::{json, Value};
+use std::path::Path;
 use crate::protocol::ToolCallResult;
 pub use crate::protocol::ToolDef;
+use crate::stale;
+use crate::registry::Registry;
 
 pub fn definition() -> ToolDef {
     ToolDef {
@@ -30,13 +33,23 @@ pub fn definition() -> ToolDef {
     }
 }
 
-pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
+pub fn handle(args: &Value, db: &MemoryDb, project_root: &Path) -> ToolCallResult {
     let target = match args["target"].as_str() {
         Some(t) if !t.is_empty() => t,
         _ => return ToolCallResult::err("fog_impact: 'target' is required"),
     };
     let depth = args["depth"].as_u64().unwrap_or(3) as u32;
     let direction = args["direction"].as_str().unwrap_or("both");
+
+    // #3: Stale detection — check if target's file changed since last scan
+    let last_indexed = Registry::load()
+        .find(&project_root.to_string_lossy())
+        .and_then(|e| e.last_indexed.clone());
+    let stale_status = stale::check_stale(project_root, target, last_indexed.as_deref());
+    let stale_warn = stale::format_warning(&stale_status, "fog_impact");
+
+    // #4: Hard cap to prevent context window flooding
+    const MAX_NODES: usize = 100;
 
     match db.impact(target, depth, direction) {
         Ok(result) => {
@@ -46,11 +59,12 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
                 "MEDIUM"   => "🟡",
                 _          => "🟢",
             };
+            let total_up = result.upstream.len();
+            let total_down = result.downstream.len();
             let mut lines = vec![
                 format!("# fog_impact: `{target}`\n"),
                 format!("**Risk:** {} {} | Upstream: {} | Downstream: {}",
-                    risk_emoji, result.risk,
-                    result.upstream.len(), result.downstream.len()),
+                    risk_emoji, result.risk, total_up, total_down),
             ];
             if result.risk == "HIGH" || result.risk == "CRITICAL" {
                 lines.push(format!(
@@ -61,18 +75,40 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
                 lines.push(format!("\n💡 {hint}"));
             }
             if !result.upstream.is_empty() {
-                lines.push(format!("\n## Upstream ({} callers)", result.upstream.len()));
-                for s in result.upstream.iter().take(20) {
+                let shown = result.upstream.len().min(MAX_NODES);
+                lines.push(format!("\n## Upstream ({} callers{})",
+                    total_up,
+                    if total_up > MAX_NODES { format!(" — showing {MAX_NODES}/{total_up}") } else { String::new() }
+                ));
+                for s in result.upstream.iter().take(MAX_NODES) {
                     lines.push(format!("  L{} `{}` [{}] - {}", s.depth, s.name, s.kind, s.file));
+                }
+                if total_up > MAX_NODES {
+                    lines.push(format!(
+                        "\n> [!WARNING]\n> **Truncated:** {}/{} nodes shown. Use `depth=1` for a tighter scope, or `direction=\"upstream\"` to focus.",
+                        shown, total_up
+                    ));
                 }
             }
             if !result.downstream.is_empty() {
-                lines.push(format!("\n## Downstream ({} deps)", result.downstream.len()));
-                for s in result.downstream.iter().take(20) {
+                let shown = result.downstream.len().min(MAX_NODES);
+                lines.push(format!("\n## Downstream ({} deps{})",
+                    total_down,
+                    if total_down > MAX_NODES { format!(" — showing {MAX_NODES}/{total_down}") } else { String::new() }
+                ));
+                for s in result.downstream.iter().take(MAX_NODES) {
                     lines.push(format!("  L{} `{}` [{}] - {}", s.depth, s.name, s.kind, s.file));
                 }
+                if total_down > MAX_NODES {
+                    lines.push(format!(
+                        "\n> [!WARNING]\n> **Truncated:** {}/{} nodes shown. Use `depth=1` for a tighter scope.",
+                        shown, total_down
+                    ));
+                }
             }
-            ToolCallResult::ok(lines.join("\n"))
+            let body = lines.join("\n");
+            let prefix = stale_warn.unwrap_or_default();
+            ToolCallResult::ok(format!("{prefix}{body}"))
         }
         Err(e) => ToolCallResult::err(format!("fog_impact error: {e}")),
     }

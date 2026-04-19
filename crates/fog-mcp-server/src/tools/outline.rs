@@ -58,6 +58,31 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
     match db.skeleton(path, max_symbols, kind_filter, include_docs) {
         Ok(symbols) => {
             if symbols.is_empty() {
+                // #9: Fuzzy fallback — try partial/suffix path match
+                match db.skeleton_fuzzy(path, max_symbols, kind_filter, include_docs) {
+                    Ok(fuzzy_hits) if !fuzzy_hits.is_empty() => {
+                        let mut lines = vec![format!(
+                            "# fog_outline: `{path}` (fuzzy match — {} symbols)\n\
+                             > Path matched via suffix/partial search. Exact path not found.\n",
+                            fuzzy_hits.len()
+                        )];
+                        for s in &fuzzy_hits {
+                            let doc = if include_docs {
+                                s.doc_snippet.as_ref()
+                                    .and_then(|d| d.lines().next().map(String::from))
+                                    .map(|l| format!("\n  /// {l}"))
+                                    .unwrap_or_default()
+                            } else { String::new() };
+                            lines.push(format!("L{} `{}` [{}]{}\n  → {}  ({})",
+                                s.start_line, s.name, s.kind, doc,
+                                s.signature.as_deref().unwrap_or("(no signature)"),
+                                s.file,
+                            ));
+                        }
+                        return ToolCallResult::ok(lines.join("\n\n"));
+                    }
+                    _ => {}
+                }
                 return ToolCallResult::ok(format!(
                     "No symbols found in '{path}'.\n\
                      Check that:\n\

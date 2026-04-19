@@ -27,6 +27,7 @@ mod indexer;
 mod protocol;
 mod registry;
 mod router;
+mod stale;
 mod tools;
 
 use std::path::{Path, PathBuf};
@@ -38,6 +39,60 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 use protocol::{McpRequest, ToolCallResult, err_response, ok_response, ERR_METHOD};
 use registry::Registry;
+
+// ---------------------------------------------------------------------------
+// #1: DbPool — per-project DB connection cache
+// PATTERN_DECISION: Level 4 (Simple Class with mutable state)
+// Justification: needs to track open DB connections across tool calls.
+// DI-safe: constructed in main(), passed by &mut ref (no global state).
+// ---------------------------------------------------------------------------
+
+/// Caches open MemoryDb instances keyed by project root PathBuf.
+/// Allows any tool to route to the correct project via `args["project"]`.
+struct DbPool {
+    /// Map of project_root → open DB connection
+    pools: std::collections::HashMap<PathBuf, Arc<Mutex<MemoryDb>>>,
+    /// Default project root (set at startup from FOG_PROJECT / CWD resolution)
+    default_root: PathBuf,
+}
+
+impl DbPool {
+    fn new(default_root: PathBuf, default_db: Arc<Mutex<MemoryDb>>) -> Self {
+        let mut pools = std::collections::HashMap::new();
+        pools.insert(default_root.clone(), default_db);
+        Self { pools, default_root }
+    }
+
+    /// Get cached DB for `root`, or open a new one. Max 8 connections.
+    fn get_or_open(&mut self, root: &Path) -> Arc<Mutex<MemoryDb>> {
+        if let Some(db) = self.pools.get(root) {
+            return db.clone();
+        }
+        // Evict oldest non-default connection if pool is full
+        if self.pools.len() >= 8 {
+            let to_remove = self.pools.keys()
+                .find(|k| **k != self.default_root)
+                .cloned();
+            if let Some(k) = to_remove { self.pools.remove(&k); }
+        }
+        // Open DB — fall back to in-memory empty on error
+        let db = create_or_open_db(root)
+            .or_else(|_| open_from_project(root))
+            .unwrap_or_else(|_| fog_memory::db::MemoryDb::open_empty()
+                .expect("in-memory fallback must always succeed"));
+        let arc = Arc::new(Mutex::new(db));
+        self.pools.insert(root.to_path_buf(), arc.clone());
+        arc
+    }
+
+    fn get_default(&self) -> Arc<Mutex<MemoryDb>> {
+        self.pools[&self.default_root].clone()
+    }
+
+    fn default_root(&self) -> &Path {
+        &self.default_root
+    }
+}
 
 // ---------------------------------------------------------------------------
 // CLI args & subcommand dispatch
@@ -124,8 +179,7 @@ fn handle_list_tools() -> Value {
 
 fn handle_tools_call(
     params: &Value,
-    db: &Arc<Mutex<MemoryDb>>,
-    project_root: &std::path::Path,
+    pool: &mut DbPool,
     registry: &Registry,
 ) -> Value {
     let tool_name = match params["name"].as_str() {
@@ -137,7 +191,53 @@ fn handle_tools_call(
     };
 
     let args = &params["arguments"];
-    let result = router::dispatch(tool_name, args, db, project_root, registry);
+
+    // #1: Per-request project routing via fog_id / name / path-suffix / fuzzy
+    let (effective_db, effective_root) = if let Some(key) = args["project"].as_str() {
+        match registry.find(key) {
+            Some(entry) => {
+                let root = PathBuf::from(&entry.path);
+                let db = pool.get_or_open(&root);
+                (db, root)
+            }
+            None => {
+                // G1: fog_scan and fog_brief may receive an absolute path to a
+                // project not yet in the registry (first-time index). Allow it.
+                let is_scan_tool = tool_name == "fog_scan" || tool_name == "fog_brief";
+                let as_path = PathBuf::from(key);
+                if is_scan_tool && as_path.is_absolute() && as_path.exists() {
+                    let db = pool.get_or_open(&as_path);
+                    (db, as_path)
+                } else {
+                    // Fail-loud: unknown project, not a valid path, not a scan tool.
+                    let known = registry.list_names();
+                    let known_str = if known.is_empty() {
+                        "(none — run fog_scan in a project directory first)".to_string()
+                    } else {
+                        known.iter().map(|n| format!("  - `{n}`")).collect::<Vec<_>>().join("\n")
+                    };
+                    let result = crate::protocol::ToolCallResult::err(format!(
+                        "ESCALATE_MISSING_CONTEXT\n\
+                         Project `{key}` not found in fog registry (tried 6-tier fuzzy match).\n\
+                         Known projects:\n{known_str}\n\n\
+                         ℹ️  Fix options:\n\
+                         1. Run fog_scan in the project root to register it first.\n\
+                         2. Use the exact registered name/fog_id shown above.\n\
+                         3. Omit `project` arg to use default: {}",
+                        pool.default_root().display()
+                    ));
+                    return json!({
+                        "content": result.content,
+                        "isError": result.is_error,
+                    });
+                }
+            }
+        }
+    } else {
+        (pool.get_default(), pool.default_root().to_path_buf())
+    };
+
+    let result = router::dispatch(tool_name, args, &effective_db, &effective_root, registry);
     json!({
         "content": result.content,
         "isError": result.is_error,
@@ -289,22 +389,24 @@ async fn main() {
     // ===========================================================
     let registry = Registry::load();
 
-    // Open DB - use create_or_open_db so fog_scan can work on a fresh project
+    // Open default DB - use create_or_open_db so fog_scan can work on a fresh project
     // without requiring the user to run CLI `index` first.
     let db_result = create_or_open_db(&project_root);
-    let db: Arc<Mutex<MemoryDb>> = match db_result {
+    let default_db: Arc<Mutex<MemoryDb>> = match db_result {
         Ok(db) => {
             eprintln!("[fog-context] Project: {}", project_root.display());
             Arc::new(Mutex::new(db))
         }
         Err(e) => {
-            // Genuine error (e.g. permissions) - still start the server with fallback
             eprintln!("[fog-context] Warning: DB not available ({}). Run fog_scan to index first.", e);
             let fallback = fog_memory::db::MemoryDb::open_empty()
                 .expect("in-memory fallback DB must always succeed");
             Arc::new(Mutex::new(fallback))
         }
     };
+
+    // #1: Wrap in DbPool for multi-project routing
+    let mut pool = DbPool::new(project_root.clone(), default_db);
 
     eprintln!("[fog-context] Ready. Listening for MCP requests on stdin...");
 
@@ -343,7 +445,7 @@ async fn main() {
                     "tools/list" => ok_response(id, handle_list_tools()),
                     "tools/call" => ok_response(
                         id,
-                        handle_tools_call(&req.params, &db, &project_root, &registry),
+                        handle_tools_call(&req.params, &mut pool, &registry),
                     ),
                     "ping" => ok_response(id, json!({})),
                     method => err_response(id, ERR_METHOD, format!("Method not found: {method}")),

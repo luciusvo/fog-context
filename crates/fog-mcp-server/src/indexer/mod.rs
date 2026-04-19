@@ -12,6 +12,7 @@
 //!   run_scan() = walk_files ∘ parse_files ∘ ingest ∘ resolve_cross_file
 //!   Each step is a pure transformation.
 
+pub mod hints;
 pub mod ingest;
 pub mod langs;
 pub mod walker;
@@ -81,8 +82,25 @@ pub fn run_scan(
         // Query actual total from DB - incremental scan may have symbols_created=0
         let total_symbols = db.total_symbols();
         let mut reg = Registry::load();
-        reg.upsert(name, path, total_symbols);
+        reg.upsert_with_warnings(name, path, total_symbols, stats.query_errors.clone());
         eprintln!("[fog] Registry updated: {} total symbols", total_symbols);
+    }
+
+    // #12b: Up-to-date detection — if nothing changed AND no errors, say so clearly
+    // "0 indexed" is ambiguous: it could mean OK or catastrophic failure.
+    if stats.files_indexed == 0 && stats.files_deleted == 0 && stats.query_errors.is_empty() {
+        let total_symbols = db.total_symbols();
+        return ToolCallResult::ok(format!(
+            "✅ **Up-to-date** — No changes detected.\n\
+             - **Project:** {}\n\
+             - **Files checked:** {total} (all match indexed snapshot)\n\
+             - **Total symbols in graph:** {total_symbols}\n\
+             - **Graph status:** Reliable ✓\n\n\
+             The knowledge graph is current. No re-indexing needed.\n\
+             Use fog_lookup, fog_inspect, fog_impact to explore.",
+            project_root.display(),
+            total = scanned.len(),
+        ));
     }
 
     // Warn about any query compile errors so agents see them immediately

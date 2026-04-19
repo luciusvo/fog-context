@@ -135,8 +135,45 @@ pub fn create_or_open_db(root: &Path) -> MemoryResult<MemoryDb> {
             .map_err(MemoryError::Database)?;
 
         eprintln!("[fog-context] Initialised new DB at {}", db_path.display());
+
+        // #7: Guard commits — inject .fog-context/ into project .gitignore
+        inject_gitignore(root);
     }
 
-    open_shared_db(root)
+    // #2: Surface schema mismatch with a user-friendly, actionable message
+    open_shared_db(root).map_err(|e| {
+        if let MemoryError::SchemaMismatch { expected, found } = &e {
+            MemoryError::Database(rusqlite::Error::InvalidPath(
+                format!(
+                    "[fog-context] SCHEMA INCOMPATIBLE: expected v{expected}, found v{found}.\n\
+                     Action: delete .fog-context/context.db then call fog_scan to reindex.\n\
+                     Command: rm -f .fog-context/context.db"
+                ).into()
+            ))
+        } else {
+            e
+        }
+    })
+}
+
+/// #7: Append `.fog-context/` entry to the project's .gitignore if present and not already included.
+/// Silently skips if .gitignore doesn't exist or is read-only.
+fn inject_gitignore(root: &Path) {
+    let gitignore = root.join(".gitignore");
+    if !gitignore.exists() { return; }
+
+    let Ok(content) = std::fs::read_to_string(&gitignore) else { return; };
+    // Already present — don't duplicate
+    if content.lines().any(|l| l.trim() == ".fog-context/" || l.trim() == ".fog-context") {
+        return;
+    }
+
+    // Ignore the DB/cache but keep hint files versioned with the project
+    let append = "\n# fog-context agentic index (auto-generated)\n.fog-context/\n!.fog-context/hints/\n";
+    if let Ok(mut file) = std::fs::OpenOptions::new().append(true).open(&gitignore) {
+        use std::io::Write;
+        let _ = file.write_all(append.as_bytes());
+        eprintln!("[fog-context] Added .fog-context/ to .gitignore (hints/ excluded)");
+    }
 }
 

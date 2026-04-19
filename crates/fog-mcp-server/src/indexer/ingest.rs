@@ -60,9 +60,12 @@ fn is_noise(name: &str) -> bool {
 // Deferred cross-file edge
 // ---------------------------------------------------------------------------
 
-struct Deferred {
-    source_id: i64,
-    target_name: String,
+/// A deferred cross-file edge (resolved in Pass 2).
+/// edge_kind distinguishes CALLS from DI_INJECT, IMPLEMENTS, DYNAMIC_IMPORT, etc.
+pub(super) struct Deferred {
+    pub(super) source_id: i64,
+    pub(super) target_name: String,
+    pub(super) edge_kind: &'static str,
 }
 
 // ---------------------------------------------------------------------------
@@ -94,6 +97,9 @@ fn run_two_pass_conn(
     let mut stats = IndexStats::default();
     stats.files_total = scanned.len();
 
+    // Write hint template if first run (idempotent)
+    super::hints::write_template_if_missing(project_root);
+
     // ── Load existing checksums for incremental mode ──
     let mut existing: HashMap<String, (i64, String)> = HashMap::new();
     if !full {
@@ -119,10 +125,10 @@ fn run_two_pass_conn(
         .cloned().collect();
     stats.files_deleted = deleted.len();
 
-    // ── Pass 1 ──
+    // ── Pass 1: ingest files in 500-file batches (#13: large-repo checkpoint) ──
     let mut all_deferred: Vec<Deferred> = Vec::new();
 
-    // Delete removed files (CASCADE cleans symbols/edges)
+    // Delete removed files first (CASCADE cleans symbols/edges)
     for path in &deleted {
         conn.execute("DELETE FROM files WHERE path = ?1", rusqlite::params![path])?;
     }
@@ -135,51 +141,63 @@ fn run_two_pass_conn(
            line_count=excluded.line_count, content_hash=excluded.content_hash,
            indexed_at=datetime('now')";
 
-    for file in &to_index {
-        let full_path = project_root.join(&file.path);
-        let content = match std::fs::read_to_string(&full_path) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
+    const BATCH_SIZE: usize = 500;
+    for chunk in to_index.chunks(BATCH_SIZE) {
+        conn.execute_batch("BEGIN")?;
+        for file in chunk {
+            let full_path = project_root.join(&file.path);
+            let content = match std::fs::read_to_string(&full_path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
 
-        // Upsert file row
-        conn.execute(sql_upsert_file, rusqlite::params![
-            file.path, file.lang,
-            file.size_bytes as i64, file.line_count as i64,
-            file.checksum,
-        ])?;
-        let file_id: i64 = conn.query_row(
-            "SELECT id FROM files WHERE path = ?1",
-            rusqlite::params![file.path],
-            |r| r.get(0),
-        )?;
-        conn.execute("DELETE FROM symbols WHERE file_id = ?1", rusqlite::params![file_id])?;
+            conn.execute(sql_upsert_file, rusqlite::params![
+                file.path, file.lang,
+                file.size_bytes as i64, file.line_count as i64,
+                file.checksum,
+            ])?;
+            let file_id: i64 = conn.query_row(
+                "SELECT id FROM files WHERE path = ?1",
+                rusqlite::params![file.path],
+                |r| r.get(0),
+            )?;
+            conn.execute("DELETE FROM symbols WHERE file_id = ?1", rusqlite::params![file_id])?;
 
-        // Parse + insert (surface query compile errors to stats, don't abort)
-        if let Some(cfg) = config_for(file.lang) {
-            match parse_file(conn, file_id, &content, &cfg, &mut stats) {
-                Ok(deferred) => all_deferred.extend(deferred),
-                Err(e) => {
-                    // Query compile error - report it, skip this language's files
-                    // (IO errors from rusqlite are still propagated via ?)
-                    stats.query_errors.push(format!("{}: {e}", cfg.name));
+            if let Some(cfg) = config_for(file.lang) {
+                match parse_file(conn, file_id, &content, &cfg, &mut stats) {
+                    Ok(deferred) => all_deferred.extend(deferred),
+                    Err(e) => {
+                        stats.query_errors.push(format!("{}: {e}", cfg.name));
+                    }
+                }
+                // Approach 2: inject macro_expansion hints from .fog-context/hints/{lang}.json
+                let lang_hints = super::hints::load(project_root, cfg.name);
+                for (pattern, resolves_to) in &lang_hints.macro_expansions {
+                    if let Ok(source_id) = conn.query_row(
+                        "SELECT id FROM symbols WHERE file_id = ?1 ORDER BY start_line LIMIT 1",
+                        rusqlite::params![file_id],
+                        |r| r.get::<_, i64>(0),
+                    ) {
+                        all_deferred.push(Deferred {
+                            source_id,
+                            target_name: resolves_to.clone(),
+                            edge_kind: "MACRO_EXPAND",
+                        });
+                        all_deferred.push(Deferred {
+                            source_id,
+                            target_name: pattern.clone(),
+                            edge_kind: "MACRO_EXPAND",
+                        });
+                    }
                 }
             }
+            stats.files_indexed += 1;
         }
-        stats.files_indexed += 1;
+        conn.execute_batch("COMMIT")?;
+        eprintln!("[fog] Pass 1 checkpoint: {}/{} files", stats.files_indexed, stats.files_total);
     }
 
-    // Update last_index timestamp
-    conn.execute(
-        "INSERT INTO meta(key,value) VALUES('last_index',datetime('now'))
-         ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-        [],
-    )?;
-
-    // ── Rebuild FTS index ──
-    // symbols_fts is a content= shadow table. Direct INSERT/DELETE on symbols
-    // fires the trigger, but DELETE + re-INSERT in a transaction can leave FTS stale.
-    // Force a full rebuild to guarantee FTS consistency after ingestion.
+    // Rebuild FTS after all batches complete
     conn.execute_batch("INSERT INTO symbols_fts(symbols_fts) VALUES('rebuild');")?;
 
     // ── Pass 2: cross-file resolution ──
@@ -195,17 +213,27 @@ fn run_two_pass_conn(
         for d in &all_deferred {
             let Some(targets) = global.get(&d.target_name) else { continue };
             let Some(&tid) = targets.first() else { continue };
-            let key = format!("{}:{}:CALLS", d.source_id, tid);
+            // Dedup key includes edge_kind to allow same symbol pair with different kinds
+            let key = format!("{}:{}:{}", d.source_id, tid, d.edge_kind);
             if seen.insert(key) {
                 let _ = conn.execute(
                     "INSERT OR IGNORE INTO edges (source_id, target_id, kind, confidence)
-                     VALUES (?1, ?2, 'CALLS', 'name_match')",
-                    rusqlite::params![d.source_id, tid],
+                     VALUES (?1, ?2, ?3, 'name_match')",
+                    rusqlite::params![d.source_id, tid, d.edge_kind],
                 );
                 stats.edges_cross += 1;
             }
         }
     }
+
+    // ── Update meta + WAL checkpoint ──
+    conn.execute(
+        "INSERT INTO meta(key,value) VALUES('last_index',datetime('now'))
+         ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        [],
+    )?;
+    // #G2-replacement: flush WAL so pool connections see latest data immediately
+    let _ = conn.execute_batch("PRAGMA wal_checkpoint(PASSIVE);");
 
     Ok(stats)
 }
@@ -335,7 +363,62 @@ fn parse_file(
                     stats.edges_intra += 1;
                 }
             } else {
-                deferred.push(Deferred { source_id, target_name: call_name });
+                deferred.push(Deferred { source_id, target_name: call_name, edge_kind: "CALLS" });
+            }
+        }
+    }
+
+    // ── Bridge Query: framework patterns (Approach 1) ──────────────────────────
+    // Run only if this language has a built-in bridge_query (DI, decorators, etc.)
+    if let Some(bridge_src) = cfg.bridge_query {
+        if let Ok(bridge_q) = Query::new(&cfg.ts_language, bridge_src) {
+            let name_idx = bridge_q.capture_names().iter()
+                .position(|n| *n == "name").map(|i| i as u32);
+            let ann_idx = bridge_q.capture_names().iter()
+                .position(|n| *n == "_ann").map(|i| i as u32);
+            let fn_idx = bridge_q.capture_names().iter()
+                .position(|n| *n == "_fn").map(|i| i as u32);
+
+            let mut cursor3 = QueryCursor::new();
+            let mut matches3 = cursor3.matches(&bridge_q, root, src);
+            while let Some(m) = matches3.next() {
+                // Get the target @name capture
+                let Some(name_cap_i) = name_idx else { continue };
+                let Some(name_cap) = m.captures.iter().find(|c| c.index == name_cap_i) else { continue };
+                let target_name = match name_cap.node.utf8_text(src) {
+                    Ok(s) if !s.is_empty() => s.to_string(),
+                    _ => continue,
+                };
+
+                // Filter: for Java, only emit if @_ann is a known DI annotation
+                if let Some(ann_i) = ann_idx {
+                    if let Some(ann_cap) = m.captures.iter().find(|c| c.index == ann_i) {
+                        let ann = ann_cap.node.utf8_text(src).unwrap_or("");
+                        const DI_ANNS: &[&str] = &["Autowired","Inject","Resource","Provides","Bean"];
+                        if !DI_ANNS.contains(&ann) {
+                            continue; // skip non-DI annotations
+                        }
+                    }
+                }
+
+                // Filter: for TS/JS, only emit if @_fn == "require"
+                if let Some(fn_i) = fn_idx {
+                    if let Some(fn_cap) = m.captures.iter().find(|c| c.index == fn_i) {
+                        let fn_name = fn_cap.node.utf8_text(src).unwrap_or("");
+                        if fn_name != "require" {
+                            continue; // skip non-require dynamic calls
+                        }
+                    }
+                }
+
+                let call_row = name_cap.node.start_position().row;
+                let source_id = find_enclosing_symbol(conn, file_id, call_row as i64)
+                    .unwrap_or(fallback_source);
+                deferred.push(Deferred {
+                    source_id,
+                    target_name,
+                    edge_kind: cfg.bridge_edge_kind,
+                });
             }
         }
     }
