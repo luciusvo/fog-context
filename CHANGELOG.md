@@ -9,50 +9,57 @@ Format: [Semantic Versioning](https://semver.org). Entries grouped by type:
 
 ## [0.6.4] - 2026-04-20
 
+Stability hardening for multi-agent workflows. Fixes critical chicken-and-egg
+issues in project registration, SQLite locking under concurrent access, and
+agent orientation (binary verification, fog_id discovery, large-repo guidance).
+
 ### Fixed
 
-- **CLI registry early registration** — `fog-mcp-server index` now registers the project in
-  `~/.fog/registry.json` BEFORE calling `run_scan()`. Previously, if indexing failed or took
-  a very long time, `registry.json` was never created, leaving agents unable to route calls.
+- **fog_brief chicken-and-egg routing** — `fog_brief` now immediately registers the
+  project in `~/.fog/registry.json` when generating a new `fog_id`. Previously, the
+  `fog_id` returned by `fog_brief` could not be used in a subsequent `fog_scan` call
+  because the project wasn't in the registry yet, causing `ESCALATE_MISSING_CONTEXT`.
+- **CLI registry early registration** — `fog-mcp-server index` now registers the project
+  in `~/.fog/registry.json` BEFORE calling `run_scan()`. Previously, if indexing failed or
+  took a very long time, `registry.json` was never written, leaving agents unable to route
+  calls by fog_id.
 - **SQLite PRAGMA ordering: busy_timeout before journal_mode** — `PRAGMA journal_mode = WAL`
-  requires an exclusive lock to switch journal modes. On a busy connection, this lock must
-  wait — but `busy_timeout` wasn't set yet at that point (it was in the same `execute_batch`
-  as `journal_mode`). Now `PRAGMA busy_timeout = 30000` is sent as a SEPARATE first call,
-  so the 30-second retry window applies to the WAL switch itself.
-- **"database is locked" now shows diagnostic guidance** — When CLI index fails with
-  `database is locked`, it now prints: which command to run to check for a concurrent indexer,
-  and how to verify once it completes. Prevents agents from re-triggering index on an already-
-  running process.
-- **README binary verification step** — Step 1 now includes explicit `ls -la` + `stats`
-  verification commands so agents can confirm the binary is executable before proceeding.
-- **README `registry.json` timing clarification** — Noted that `registry.json` is created on
-  first MCP `fog_brief` call or CLI `fog-mcp-server index`, NOT at install time.
-
----
-
-## [0.6.3] - 2026-04-20
-
-### Fixed
-
-- **fog_brief chicken-and-egg routing** — `fog_brief` now immediately registers the project
-  in `~/.fog/registry.json` when creating a new `fog_id`. Previously, the `fog_id` returned
-  by `fog_brief` could not be used in a subsequent `fog_scan` call because the project wasn't
-  in the registry yet, causing `ESCALATE_MISSING_CONTEXT`.
-- **Large repo advisory in fog_brief** — When a project is not yet indexed, `fog_brief` now
-  performs a quick file count (excludes `.git/`, `node_modules/`, `target/`, etc.) and shows:
+  requires an exclusive lock to switch modes. Without `busy_timeout` already set on the
+  connection, this switch fails immediately with "database is locked" if another connection
+  is open. Fixed by running `PRAGMA busy_timeout = 30000` as a SEPARATE first call in both
+  `open_shared_db()` and `run_two_pass()`, so the 30-second retry window covers the WAL
+  switch itself.
+- **"database is locked" diagnostic guidance** — When CLI index fails with `database is
+  locked`, it now prints the `ps` command to check for a concurrent indexer and the
+  `stats` command to verify completion. Prevents agents from re-triggering index on an
+  already-running process.
+- **Large repo advisory in fog_brief** — When a project is not yet indexed, `fog_brief`
+  performs a quick file count (excluding `.git/`, `node_modules/`, `target/`, etc.) and
+  shows the appropriate action:
   - > 1 000 files: `⚠️ Large project (~N files) — use CLI for initial indexing`
-  - ≤ 1 000 files: `📁 ~N files detected — run fog_scan({ "project": "fog_id" })`
-  Agents can now make the CLI vs MCP decision **before** submitting `fog_scan`.
-- **README `FOG_PROJECT` removal** — Scenario B ("`FOG_PROJECT` env var") was still present
-  in README despite being removed in v0.6.2, causing agents to configure an unsupported option.
-  Replaced with correct multi-project vs single-project setup documentation.
+  - ≤ 1 000 files: `📁 ~N files — run fog_scan({ "project": "fog_id" })`
+  Agents can decide CLI vs MCP **before** submitting `fog_scan`.
+- **README `FOG_PROJECT` removal** — Scenario B ("`FOG_PROJECT` env var") remained in
+  README despite the deprecation in v0.6.2, causing agents to set an unsupported option.
+  Replaced with correct Scenario A (multi-project, fog_id per-call) and Scenario B
+  (single-project, `--project` arg).
+- **README binary verification step** — Step 1 now includes explicit `ls -la` and `stats`
+  verification commands. Agents can confirm the binary is executable before proceeding.
+- **README `registry.json` timing note** — Clarified that `registry.json` is created on
+  first `fog_brief` (MCP) or `fog-mcp-server index` (CLI), NOT at install time.
+
+### Added
+
+- **AGENTS.md STEP -1** — New mandatory pre-step before fog_id lookup: determines the
+  project path from context (single-project mode / task prompt / `fog_roots()` listing).
+  Closes the gap where all 3 fog_id paths (A/B/C) assumed the agent already knew the path.
 
 ---
 
 ## [0.6.2] - 2026-04-20
 
-Consolidates v0.6.1 + v0.6.2 changes: Hybrid Hint System, multi-tenant hardening,
-fog_id lifecycle, IOPS reduction, and connection pool management.
+Consolidates multi-tenant architecture rewrite: fog_id routing protocol, Hybrid Hint
+System, DbPool LRU/TTL management, and IOPS reduction.
 
 ### Added
 
@@ -74,12 +81,10 @@ fog_id lifecycle, IOPS reduction, and connection pool management.
 - **Batch Commit Pass 1 (#13):** Commits every 500 files. Large repos survive interruption.
 - **WAL Checkpoint:** `PRAGMA wal_checkpoint(PASSIVE)` after Pass 2.
 - **fog_scan Large Repo Advisory:** > 1000 files → warns + recommends CLI indexing.
-- **AGENTS.md writer:** Now generates `<!-- fog-context -->` ... `<!-- /fog-context -->` section with fog_id protocol, version check guidance, and large-repo CLI notes.
-- **AGENTS.md §8:** Version Check section documents how agents detect new binaries.
-- **AGENTS.md §0:** 3-path fog_id bootstrap (file read / fog_brief / fog_scan).
+- **AGENTS.md writer:** Generates `<!-- fog-context -->` ... `<!-- /fog-context -->` section with fog_id protocol, version check guidance, and large-repo CLI notes.
 - **`fog_constraints` inline mode** — push-based Layer 3 injection without ADR files.
 - **`fog_constraints` init mode** — `fog_constraints({ "init": true })` bootstraps Layer 3.
-- **CLI indexing progress output** — `eprintln` progress markers on stderr.
+- **CLI indexing progress output** — `eprintln` progress markers on stderr every 500-file batch.
 
 ### Changed
 
@@ -95,9 +100,6 @@ fog_id lifecycle, IOPS reduction, and connection pool management.
 - **SQLite PRAGMAs** — `cache_size = -2000` (2MB, was 8MB) + `mmap_size = 0` (disables mmap) per connection.
 - **FD inheritance fix** — MCP server calls `close_range(3, MAX)` at startup to close all file descriptors inherited from Electron parent (LevelDB, GPU cache handles).
 - **`Deferred.edge_kind`:** Cross-file edge dedup includes edge_kind; DI_INJECT and CALLS between same pair both preserved.
-- **FTS rebuild timing:** Once after all batches complete.
-- **AGENTS.md §2 Routing:** Rewritten with fog_id as the ONLY routing key; explicit warning against FOG_PROJECT.
-- **AGENTS.md §6:** max connections updated from 8 → 4; LRU eviction noted.
 
 ### Fixed
 
