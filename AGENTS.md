@@ -9,19 +9,49 @@
 
 This is the most important section. Violating it = **FAILED HANDOFF**.
 
+### STEP -1: Determine what project you are working on
+
+Before getting a `fog_id`, you need the **absolute project path**. Choose based on your setup:
+
+**Case 1 — Single-project mode** (MCP configured with `--project`):
+```
+fog_brief({})   ← call with NO args
+# Server already knows the project — response shows fog_id immediately
+# → skip to STEP 1
+```
+
+**Case 2 — Multi-project mode, path given in task prompt/workspace:**
+```
+# Project path is in your task description or IDE workspace variable
+# → use it directly in Path A/B/C below
+```
+
+**Case 3 — Multi-project mode, path unknown:**
+```
+fog_roots({})
+# Returns: table of all registered projects with fog_id, path, symbol count
+# → match by project name or path, capture fog_id from that row
+```
+
+> If `fog_roots` shows the project → use its `fog_id` directly, skip to STEP 1.
+> If `fog_roots` shows nothing → project never indexed → proceed to STEP 0 with the absolute path.
+
+---
+
 ### STEP 0: Get Your fog_id (before ANY other MCP call)
 
-**Path A — Project already indexed (fastest):**
+_Use these paths only after STEP -1 has given you an absolute path._
+
+**Path A — Project already indexed (fastest, no MCP):**
 ```bash
-# Read directly from filesystem (no MCP call needed)
-cat {project_root}/.fog-context/config.toml
+cat /absolute/path/to/project/.fog-context/config.toml
 # fog_id = "fog_019506a8b3f8..."
 ```
 
-**Path B — Project already indexed but no shell access:**
+**Path B — Project already indexed, need MCP:**
 ```
 fog_brief({ "project": "/absolute/path/to/project" })
-# First line of response: fog_id: `fog_019506...`  ← capture this
+# Response header: fog_id: `fog_019506...`  ← capture this
 ```
 
 **Path C — Project NOT yet indexed (first time):**
