@@ -172,7 +172,11 @@ fn run_two_pass_conn(
                 match parse_file(conn, file_id, &content, &cfg, &mut stats) {
                     Ok(deferred) => all_deferred.extend(deferred),
                     Err(e) => {
-                        stats.query_errors.push(format!("{}: {e}", cfg.name));
+                        let msg = format!("{}: {}", cfg.name, e);
+                        if !stats.query_errors.contains(&msg) {
+                            stats.query_errors.push(msg.clone());
+                        }
+                        log_global_parser_error(cfg.name, &e.to_string());
                     }
                 }
                 // Approach 2: inject macro_expansion hints from .fog-context/hints/{lang}.json
@@ -202,10 +206,13 @@ fn run_two_pass_conn(
         eprintln!("[fog] Pass 1 checkpoint: {}/{} files", stats.files_indexed, stats.files_total);
     }
 
+    eprintln!("[fog] 3/5 🔎 Rebuilding full-text search index (this blocks for a moment)...");
+
     // Rebuild FTS after all batches complete
     conn.execute_batch("INSERT INTO symbols_fts(symbols_fts) VALUES('rebuild');")?;
 
     // ── Pass 2: cross-file resolution ──
+    eprintln!("[fog] 4/5 🔗 Resolving cross-file references ({} items)...", all_deferred.len());
     if !all_deferred.is_empty() {
         let mut global: HashMap<String, Vec<i64>> = HashMap::new();
         let mut stmt = conn.prepare("SELECT id, name FROM symbols")?;
@@ -215,7 +222,8 @@ fn run_two_pass_conn(
         }
 
         let mut seen: HashSet<String> = HashSet::new();
-        for d in &all_deferred {
+        let total_deferred = all_deferred.len();
+        for (i, d) in all_deferred.iter().enumerate() {
             let Some(targets) = global.get(&d.target_name) else { continue };
             let Some(&tid) = targets.first() else { continue };
             // Dedup key includes edge_kind to allow same symbol pair with different kinds
@@ -228,8 +236,14 @@ fn run_two_pass_conn(
                 );
                 stats.edges_cross += 1;
             }
+            if i > 0 && i % 5000 == 0 {
+                eprintln!("[fog] Pass 2 checkpoint: {}/{} references resolved", i, total_deferred);
+            }
         }
     }
+
+    eprintln!("[fog] 5/5 💾 Flushing database to disk (WAL checkpoint)...");
+
 
     // ── Update meta + WAL checkpoint ──
     conn.execute(
@@ -524,14 +538,14 @@ pub fn write_agents_md(root: &Path, files: usize, symbols: usize, elapsed_ms: u1
         format!(
             "\n\
             ### 🔴 First-time Setup - MANDATORY Knowledge Layer Bootstrap\n\
-            > fog-context indexed Layer 1 (Physical: {symbols} symbols). \
-            Layers 2-4 are empty - Knowledge Score: 0/100.\n\
+            > fog-context auto-indexed Layer 1 (Physical: {symbols} symbols). \
+            Semantic Layers 2-4 are currently empty.\n\
             > Complete these steps **once** to unlock full intelligence:\n\
             \n\
             ```\n\
-            Step 1 - Layer 2 (Business Domains): Tell fog-context what each area does\n\
-            fog_assign({{ domain: \"Authentication\", symbols: [\"login\", \"auth_check\"] }})\n\
-            fog_assign({{ domain: \"DataAccess\",     symbols: [\"db_query\", \"save_record\"] }})\n\
+            Step 1 - Layer 2 (Business Domains): Map Semantic Synonyms to Exact Code\n\
+            fog_assign({{ domain: \"Notification\", keywords: [\"mail\", \"sms\"], symbols: [\"NotificationDispatcher\"] }})\n\
+            fog_assign({{ domain: \"DataAccess\",   keywords: [\"sql\", \"db\"],   symbols: [\"db_query\"] }})\n\
             \n\
             Step 2 - Layer 3 (Constraints): Ingest architecture rules from ADR files\n\
             fog_constraints({{}})          ← scans logs/decisions/, docs/adr/, docs/decisions/\n\
@@ -545,7 +559,7 @@ pub fn write_agents_md(root: &Path, files: usize, symbols: usize, elapsed_ms: u1
             fog_decisions({{ functions: [\"changed_fn\"], reason: \"WHY it changed\", revert_risk: \"LOW|MEDIUM|HIGH\" }})\n\
             ```\n\
             > Completing a task without recording WHY = **KNOWLEDGE GAP VIOLATION**.\n\
-            > Knowledge Score rises from 0 → 100 as you populate Layers 2-4.\n",
+            > Context Maturity visualization will update as you populate Layers 2-4.\n",
         )
     } else {
         String::new()
@@ -583,6 +597,14 @@ pub fn write_agents_md(root: &Path, files: usize, symbols: usize, elapsed_ms: u1
          `fog_brief` shows: `Indexed by: v0.6.x`\n\
          If binary version ≠ indexed version → 🆕 banner appears → run fog_scan to refresh.\n\
          \n\
+         ### 🪄 Advanced: Handling Framework Magic (IoC, Event Bus, Metaprogramming)\n\
+         If `fog_trace` breaks because of Dependency Injection (Interfaces), Event Buses, or dynamic metaprogramming (like Rails `has_many`), AST cannot see the link. You MUST bridge it via hints:\n\
+         1. Create `.fog-context/hints/<lang>.json` (e.g. `csharp.json`, `ruby.json`)\n\
+         2. Use `extra_calls` to bridge EventBus/IoC: `[ {{ \"from\": \"IUserRepository.Add\", \"to\": \"UserRepository.Add\" }} ]`\n\
+         3. Use `di_annotations` to tag IoC: `[ \"@Inject\", \"@MyService\" ]`\n\
+         4. Use `macro_expansions` to bridge metaprogramming aliases.\n\
+         5. Run `fog_scan(full=false)` immediately to apply the hints to the Graph!\n\
+         \n\
          ### Large Repos (>1000 files)\n\
          Prefer CLI for initial index (shows progress, no MCP timeout):\n\
          ```bash\n\
@@ -594,3 +616,28 @@ pub fn write_agents_md(root: &Path, files: usize, symbols: usize, elapsed_ms: u1
     let _ = std::fs::write(&agents_path, format!("{prefix}{section}"));
 }
 
+fn log_global_parser_error(lang: &str, err: &str) {
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".into());
+    let log_dir = std::path::PathBuf::from(home).join(".fog").join("logs");
+    let _ = std::fs::create_dir_all(&log_dir);
+    let log_file = log_dir.join("parser_errors.log");
+    
+    use std::io::Write;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    let s = secs % 60;
+    let m = (secs / 60) % 60;
+    let h = (secs / 3600) % 24;
+    let days = secs / 86400;
+    let year = 1970 + days / 365;
+    let day_of_year = days % 365;
+    let month = day_of_year / 30 + 1;
+    let day = day_of_year % 30 + 1;
+    let now = format!("{year:04}-{month:02}-{day:02}T{h:02}:{m:02}:{s:02}Z");
+
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(log_file) {
+        let _ = writeln!(f, "[{}] [{}]: {}", now, lang, err);
+    }
+}

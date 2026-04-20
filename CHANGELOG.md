@@ -7,14 +7,17 @@ Format: [Semantic Versioning](https://semver.org). Entries grouped by type:
 
 ---
 
-## [0.6.4] - 2026-04-20
+## [0.6.5] - 2026-04-20
 
 Stability hardening for multi-agent workflows. Fixes critical chicken-and-egg
 issues in project registration, SQLite locking under concurrent access, and
-agent orientation (binary verification, fog_id discovery, large-repo guidance).
+semantic bridging (AST limits bypassed via Hint Sync / Alias Mapping).
 
 ### Fixed
 
+- **Multi-Tenant Hot-Reload Cache** — `handle_tools_call` now eagerly reloads `Registry` on every MCP request to fix `ESCALATE_MISSING_CONTEXT` when a separate CLI process registers a new project. Previously, the static boot `Registry` became a stale cache.
+- **Global Error Telemetry Separation** — Parser/Tree-sitter compiler errors (`query_errors`) are no longer saved within `registry.json` (bloating the global multiplexer). Instead, they are cleanly dumped to a strictly separated log file: `~/.fog/logs/parser_errors.log`.
+- **Node Classification Syntax in Swift/Lua/C++** — Patched query predicates (`#eq?`) ensuring nodes without valid type tags (e.g. implicitly typed swift `class_declaration`) are resilient against compilation crashes.
 - **fog_brief chicken-and-egg routing** — `fog_brief` now immediately registers the
   project in `~/.fog/registry.json` when generating a new `fog_id`. Previously, the
   `fog_id` returned by `fog_brief` could not be used in a subsequent `fog_scan` call
@@ -50,11 +53,11 @@ agent orientation (binary verification, fog_id discovery, large-repo guidance).
 
 ### Added
 
+- **Implicit Bridge / Framework Hint Engine Instructions** — `AGENTS.md` explicitly lists `.fog-context/hints/<lang>.json` (`di_annotations`, `extra_calls`, etc.) under a newly added **Advanced Framework Magic** section so Agents can dynamically bridge missing AST connections globally.
+- **Semantic Synonym Injection** — Emphasized `fog_assign({ keywords: ["mail"] })` inside `AGENTS.md` onboarding snippet to proactively encourage Agents to build semantic aliases (without using Vector/RAG mechanisms).
 - **AGENTS.md STEP -1** — New mandatory pre-step before fog_id lookup: determines the
   project path from context (single-project mode / task prompt / `fog_roots()` listing).
   Closes the gap where all 3 fog_id paths (A/B/C) assumed the agent already knew the path.
-
----
 
 ## [0.6.2] - 2026-04-20
 

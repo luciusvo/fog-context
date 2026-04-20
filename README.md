@@ -1,6 +1,6 @@
 # fog-context - Agentic Codebase Intelligence Engine
 
-> **v0.6.2** | Zero runtime dependency | <5ms cold start | 14 MCP Tools | Rust
+> **v0.6.5** | Zero runtime dependency | <5ms cold start | 14 MCP Tools | Rust
 
 fog-context is a **dual-mode binary** that serves as the memory backbone for AI agents working on large codebases. It provides a 5-layer knowledge graph via the Model Context Protocol (MCP), integrating with Cursor, Cline, Claude Desktop, and Zed.
 
@@ -47,6 +47,8 @@ After install, your fog home directory looks like:
 ~/.fog/
 ├── bin/
 │   └── fog-mcp-server     ← Universal binary (shared by all repos)
+├── logs/
+│   └── parser_errors.log  ← Global telemetry for AST query crashes
 └── registry.json          ← Auto-created on first fog_brief or CLI index.
 ```
 
@@ -56,7 +58,7 @@ After install, your fog home directory looks like:
 
 ### Step 2: Configure your AI editor (one-time, works for ALL repos)
 
-fog-context v0.6.2 uses **explicit per-call routing via `fog_id`**. There is no global env var.
+fog-context v0.6.5 uses **explicit per-call routing via `fog_id`**. There is no global env var.
 Choose the setup that matches your workflow:
 
 ---
@@ -217,8 +219,23 @@ your-project/
 ├── .fog-id                        ← Stable UUID (survives folder renames)
 ├── .fog-context/
 │   ├── context.db                 ← SQLite knowledge graph (Layers 1-4)
-│   └── AGENTS.md                  ← Auto-generated agent instructions
+│   ├── AGENTS.md                  ← Auto-generated agent instructions
+│   └── hints/<lang>.json (opt)    ← Manual bridges for IoC / Metaprogramming
 └── .fog.yml (optional)            ← Custom config (ADR paths, ignore patterns)
+```
+
+### Optional: `.fog-context/hints/<lang>.json` (Framework Magic)
+
+For frameworks heavily relying on Dependency Injection (IoC), Event Buses, or Metaprogramming (Rails `has_many`), you can supply static hints to bridge edges that the AST cannot naturally see.
+
+```json
+// .fog-context/hints/csharp.json
+{
+  "di_annotations": ["@Inject", "@MyService", "[ApiController]"],
+  "extra_calls": [
+    { "from": "IUserRepository.Add", "to": "UserRepository.Add" }
+  ]
+}
 ```
 
 ### Optional: `.fog.yml` per-project config

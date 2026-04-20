@@ -156,14 +156,30 @@ pub fn handle(
                 format!("**DB:** .fog-context/context.db ({})", db_size),
                 format!("**Indexed by:** v{}", indexed_version.unwrap_or_else(|| "(not yet indexed)".to_string())),
                 String::new(),
-                "## 📊 Index Status".to_string(),
+                "## 📊 Context Graph Maturity".to_string(),
                 format!("**State:** {status}"),
-                format!("**Knowledge Score:** {}/100", score.layer_score),
-                format!("**Symbols:** {} across {} files", score.total_symbols, score.total_files),
-                format!("**Edges:** {}", score.total_edges),
-                format!("**Domains (L2):** {}", score.total_domains),
-                format!("**Constraints (L3):** {}", score.total_constraints),
-                format!("**Decisions (L4):** {}", score.total_decisions),
+                "**Layers Populated:**".to_string(),
+                if score.total_symbols > 0 {
+                    format!("  [■■■■■] L1 Physical:  {} Symbols, {} Edges", score.total_symbols, score.total_edges)
+                } else {
+                    "  [□□□□□] L1 Physical:  0 Symbols (Not indexed)".to_string()
+                },
+                if score.total_domains > 0 {
+                    format!("  [■■■■■] L2 Business:  {} Domains defined", score.total_domains)
+                } else {
+                    "  [□□□□□] L2 Business:  0 Domains defined".to_string()
+                },
+                if score.total_constraints > 0 {
+                    format!("  [■■■■■] L3 Rules:     {} Constraints (ADRs)", score.total_constraints)
+                } else {
+                    "  [□□□□□] L3 Rules:     0 Constraints (ADRs)".to_string()
+                },
+                if score.total_decisions > 0 {
+                    format!("  [■■■■■] L4 Causality: {} Decision Records", score.total_decisions)
+                } else {
+                    "  [□□□□□] L4 Causality: 0 Decision Records".to_string()
+                },
+                String::new(),
                 format!("**Projects in registry:** {}", registry.list().len()),
             ];
 
@@ -202,18 +218,7 @@ pub fn handle(
                 }
             }
 
-            // #15: Grammar warnings from last scan (stored in registry)
-            let path_str = project_root.to_string_lossy();
-            if let Some(entry) = registry.find(&path_str) {
-                if !entry.grammar_warnings.is_empty() {
-                    lines.push("\n## ⚠️ Grammar Warnings (from last fog_scan)".to_string());
-                    lines.push("> Some languages may have incomplete symbol graphs:".to_string());
-                    for w in &entry.grammar_warnings {
-                        lines.push(format!("> - `{w}`"));
-                    }
-                    lines.push("> Run `fog_scan({})` after updating fog-context to fix.".to_string());
-                }
-            }
+
 
             ToolCallResult::ok(format!("{}{unindexed_advisory}", lines.join("\n")))
         }

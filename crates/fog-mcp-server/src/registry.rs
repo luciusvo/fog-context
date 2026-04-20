@@ -20,10 +20,6 @@ pub struct RepoEntry {
     /// Survives folder renames and path changes.
     #[serde(default)]
     pub fog_id: Option<String>,
-    /// Grammar parse errors from the last fog_scan. Empty = all languages OK.
-    /// Stored so fog_brief can surface them without re-scanning.
-    #[serde(default)]
-    pub grammar_warnings: Vec<String>,
 }
 
 /// The project registry — loaded from disk on startup.
@@ -127,42 +123,12 @@ impl Registry {
                 last_indexed: Some(now),
                 db_path: Some(format!("{}/.fog-context/context.db", path)),
                 fog_id: Some(fog_id),
-                grammar_warnings: vec![],
             });
         }
         self.save();
     }
 
-    /// Upsert with grammar warnings from the last scan.
-    pub fn upsert_with_warnings(
-        &mut self,
-        name: String,
-        path: String,
-        symbol_count: u64,
-        grammar_warnings: Vec<String>,
-    ) {
-        let fog_id = ensure_project_id(&path);
-        let now = chrono_now();
-        if let Some(entry) = self.entries.iter_mut().find(|e| {
-            e.fog_id.as_deref() == Some(&fog_id) || e.path == path
-        }) {
-            entry.symbol_count = Some(symbol_count);
-            entry.last_indexed = Some(now);
-            entry.fog_id = Some(fog_id);
-            entry.grammar_warnings = grammar_warnings;
-        } else {
-            self.entries.push(RepoEntry {
-                name,
-                path: path.clone(),
-                symbol_count: Some(symbol_count),
-                last_indexed: Some(now),
-                db_path: Some(format!("{}/.fog-context/context.db", path)),
-                fog_id: Some(fog_id),
-                grammar_warnings,
-            });
-        }
-        self.save();
-    }
+
 
     /// Register a new project (legacy — does not update if already exists)
     pub fn register(&mut self, name: String, path: String) {

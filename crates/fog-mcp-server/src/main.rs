@@ -246,7 +246,6 @@ fn handle_list_tools() -> Value {
 fn handle_tools_call(
     params: &Value,
     pool: &mut DbPool,
-    registry: &Registry,
 ) -> Value {
     let tool_name = match params["name"].as_str() {
         Some(n) => n,
@@ -256,6 +255,7 @@ fn handle_tools_call(
         }
     };
 
+    let registry = Registry::load();
     let args = &params["arguments"];
 
     // #1: Per-request project routing via fog_id / name / path-suffix / fuzzy
@@ -331,7 +331,7 @@ fn handle_tools_call(
         }
     };
 
-    let result = router::dispatch(tool_name, args, &effective_db, &effective_root, registry);
+    let result = router::dispatch(tool_name, args, &effective_db, &effective_root, &registry);
 
     // A4: After fog_scan, evict the write-heavy connection so the next query
     // gets a fresh reader. Prevents query-tools from blocking on scan's WAL.
@@ -552,7 +552,6 @@ async fn main() {
 
     // Open default DB (only if a project root was resolved)
     // Fix 2: also ensure fog_id exists immediately — before index runs
-    let registry = Registry::load();
 
     let (default_db, default_root) = match project_root_opt {
         Some(ref root) => {
@@ -619,7 +618,7 @@ async fn main() {
                     "tools/list" => ok_response(id, handle_list_tools()),
                     "tools/call" => ok_response(
                         id,
-                        handle_tools_call(&req.params, &mut pool, &registry),
+                        handle_tools_call(&req.params, &mut pool),
                     ),
                     "ping" => ok_response(id, json!({})),
                     method => err_response(id, ERR_METHOD, format!("Method not found: {method}")),

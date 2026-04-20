@@ -49,22 +49,22 @@ pub fn run_scan(
     let start = std::time::Instant::now();
 
     // E7: Progress feedback to stderr (visible in CLI, silent to MCP JSON-RPC stdout)
-    eprintln!("[fog] Walking files: {}", project_root.display());
+    eprintln!("[fog] 1/5 🔍 Walking files: {}", project_root.display());
 
     // Step 1: Walk files (gitignore-aware)
     let scanned = walker::walk_project(project_root);
     if scanned.is_empty() {
         return ToolCallResult::ok("⚠️  No source files found. Is the project path correct?");
     }
-    eprintln!("[fog] Found {} files. Starting indexer (full={})...", scanned.len(), full);
+    eprintln!("[fog] 2/5 🌲 Found {} files. Starting parsing (Pass 1, full={})...", scanned.len(), full);
 
     // Step 2: Run two-pass indexer
     let stats = match ingest::run_two_pass(project_root, db, &scanned, full) {
         Ok(s) => s,
         Err(e) => return ToolCallResult::err(format!("fog_scan error: {e}")),
     };
-    eprintln!("[fog] Pass 1 done: {} symbols, {} intra-file edges", stats.symbols_created, stats.edges_intra);
-    eprintln!("[fog] Pass 2 done: {} cross-file edges", stats.edges_cross);
+    eprintln!("[fog] ✓ Pass 1 done: {} symbols, {} intra-file edges", stats.symbols_created, stats.edges_intra);
+    eprintln!("[fog] ✓ Pass 2 done: {} cross-file edges", stats.edges_cross);
 
     let elapsed = start.elapsed().as_millis();
 
@@ -90,7 +90,7 @@ pub fn run_scan(
         let path = project_root.to_string_lossy().into_owned();
         let total_symbols = db.total_symbols();
         let mut reg = Registry::load();
-        reg.upsert_with_warnings(name, path, total_symbols, stats.query_errors.clone());
+        reg.upsert(name, path, total_symbols);
         eprintln!("[fog] Registry updated: {} total symbols", total_symbols);
     }
 
@@ -131,10 +131,18 @@ pub fn run_scan(
     let warnings = if stats.query_errors.is_empty() {
         String::new()
     } else {
-        format!(
-            "\n\n> [!WARNING]\n> **Parser errors** - the following languages may have 0 symbols:\n{}",
-            stats.query_errors.iter().map(|e| format!("> - `{e}`")).collect::<Vec<_>>().join("\n")
-        )
+        let total_symbols = db.total_symbols();
+        if total_symbols == 0 {
+            format!(
+                "\n\n> [!CRITICAL]\n> 🔴 **Toàn bộ hệ thống không thể trích xuất được code.** Phát hiện lỗi nghiêm trọng từ Parsers:\n{}",
+                stats.query_errors.iter().map(|e| format!("> - `{e}`")).collect::<Vec<_>>().join("\n")
+            )
+        } else {
+            format!(
+                "\n\n> [!WARNING]\n> ⚠️ **Parser errors** - Có một số lỗi cú pháp khiến một phần source code không lấy được dữ liệu:\n{}",
+                stats.query_errors.iter().map(|e| format!("> - `{e}`")).collect::<Vec<_>>().join("\n")
+            )
+        }
     };
 
     ToolCallResult::ok(format!(

@@ -465,13 +465,15 @@ const LUA_CALL_QUERY: &str = r#"
 // =============================================================================
 #[cfg(feature = "swift")]
 const SWIFT_DEF_QUERY: &str = r#"
-(class_declaration name: (type_identifier) @name) @def
+(class_declaration declaration_kind: _ @kind name: (type_identifier) @name (#eq? @kind "class")) @def
+(class_declaration declaration_kind: _ @kind name: (type_identifier) @name (#eq? @kind "struct")) @def
+(class_declaration declaration_kind: _ @kind name: (type_identifier) @name (#eq? @kind "enum")) @def
+(class_declaration declaration_kind: _ @kind name: (type_identifier) @name (#eq? @kind "actor")) @def
 (protocol_declaration name: (type_identifier) @name) @def
 (function_declaration name: (simple_identifier) @name) @def
-(enum_declaration name: (type_identifier) @name) @def
 "#;
 #[cfg(feature = "swift")]
-const SWIFT_KINDS: &[&str] = &["class","protocol","function","enum"];
+const SWIFT_KINDS: &[&str] = &["class", "struct", "enum", "actor", "protocol", "function"];
 #[cfg(feature = "swift")]
 const SWIFT_CALL_QUERY: &str = r#"
 (call_expression function: (simple_identifier) @name) @call
