@@ -534,7 +534,7 @@ pub fn write_agents_md(root: &Path, files: usize, symbols: usize, elapsed_ms: u1
     // Sprint 3D: add onboarding block when this appears to be a first-time index
     // (AGENTS.md didn't exist or had no fog-context section yet)
     let is_first_run = !existing.contains(marker);
-    let onboarding = if is_first_run && symbols > 0 {
+    let onboarding = if is_first_run {
         format!(
             "\n\
             ### 🔴 First-time Setup - MANDATORY Knowledge Layer Bootstrap\n\

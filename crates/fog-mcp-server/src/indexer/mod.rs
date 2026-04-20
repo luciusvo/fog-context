@@ -134,12 +134,12 @@ pub fn run_scan(
         let total_symbols = db.total_symbols();
         if total_symbols == 0 {
             format!(
-                "\n\n> [!CRITICAL]\n> 🔴 **Toàn bộ hệ thống không thể trích xuất được code.** Phát hiện lỗi nghiêm trọng từ Parsers:\n{}",
+                "\n\n> [!CRITICAL]\n> 🔴 **No symbols extracted.** All parsers failed. The knowledge graph is empty:\n{}",
                 stats.query_errors.iter().map(|e| format!("> - `{e}`")).collect::<Vec<_>>().join("\n")
             )
         } else {
             format!(
-                "\n\n> [!WARNING]\n> ⚠️ **Parser errors** - Có một số lỗi cú pháp khiến một phần source code không lấy được dữ liệu:\n{}",
+                "\n\n> [!WARNING]\n> ⚠️ **Parser errors detected** — some source files could not be parsed. Partial graph only:\n{}",
                 stats.query_errors.iter().map(|e| format!("> - `{e}`")).collect::<Vec<_>>().join("\n")
             )
         }

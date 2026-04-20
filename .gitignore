@@ -12,3 +12,7 @@ fog-mcp-windows-amd64.exe
 
 # Local .fog-id if accidentally created at repo root
 .fog-id
+
+# fog-context agentic index (auto-generated)
+.fog-context/
+!.fog-context/hints/
