@@ -51,6 +51,9 @@ walkdir  = "2"
 # Hashing
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
+# OS / System (for close_range syscall — close inherited FDs from Electron parent)
+libc = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 

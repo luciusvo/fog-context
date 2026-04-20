@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use std::path::Path;
 use crate::protocol::ToolCallResult;
 pub use crate::protocol::ToolDef;
-use crate::registry::{read_project_id, ProjectConfig};
+use crate::registry::ProjectConfig;
 
 pub fn definition() -> ToolDef {
     ToolDef {
@@ -49,7 +49,26 @@ pub fn handle(
                 "🔴 Low knowledge quality"
             };
 
+            // C2+C3: Version check
+            let binary_version = env!("CARGO_PKG_VERSION");
+            let cfg = ProjectConfig::load(project_root);
+            let indexed_version = cfg.indexer_version.clone();
+            let version_banner = match &indexed_version {
+                None => format!(
+                    "\n> ⚠️ **Index not yet created** — run `fog_scan` to build the knowledge graph.\n"
+                ),
+                Some(v) if v != binary_version => format!(
+                    "\n> 🆕 **New binary detected!** Binary: `v{binary_version}` | Index built by: `v{v}`\n\
+                     > Run `fog_scan({{ \"project\": \"{}\" }})` to refresh the index with the new version.\n",
+                    project_root.display()
+                ),
+                _ => String::new(),
+            };
+
             // F3: Resolve project identity from config.toml
+            // Use ensure_project_id (not read_project_id) so fog_id is always set
+            let fog_id = crate::registry::ensure_project_id(&project_root.to_string_lossy());
+
             let project_name = ProjectConfig::load(project_root)
                 .name
                 .or_else(|| {
@@ -57,9 +76,6 @@ pub fn handle(
                         .map(|n| n.to_string_lossy().into_owned())
                 })
                 .unwrap_or_else(|| "unknown".to_string());
-
-            let fog_id = read_project_id(&project_root.to_string_lossy())
-                .unwrap_or_else(|| "not assigned yet".to_string());
 
             // DB file size
             let db_size = {
@@ -74,13 +90,14 @@ pub fn handle(
             };
 
             let mut lines = vec![
-                "# fog-context Status\n".to_string(),
-                // F3: Project identity section — agents verify they're in the right project
-                "## 🗂️ Active Project".to_string(),
-                format!("- **Name:** {}", project_name),
-                format!("- **Path:** {}", project_root.display()),
-                format!("- **fog_id:** `{}`", fog_id),
-                format!("- **DB:** .fog-context/context.db ({})", db_size),
+                format!("# fog-context v{binary_version} — Status{version_banner}"),
+                // fog_id FIRST — agents must capture this for all subsequent calls
+                "## 🔑 Project Identity".to_string(),
+                format!("**fog_id:** `{fog_id}`  ← use this in all calls: `{{ \"project\": \"{fog_id}\" }}`"),
+                format!("**Name:** {}", project_name),
+                format!("**Path:** `{}`", project_root.display()),
+                format!("**DB:** .fog-context/context.db ({})", db_size),
+                format!("**Indexed by:** v{}", indexed_version.unwrap_or_else(|| "(not yet indexed)".to_string())),
                 String::new(),
                 "## 📊 Index Status".to_string(),
                 format!("**State:** {status}"),

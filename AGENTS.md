@@ -1,4 +1,4 @@
-# fog-context — AI Agent Onboarding Guide (v0.6.1)
+# fog-context — AI Agent Onboarding Guide (v0.6.2)
 
 > **READ THIS BEFORE TOUCHING ANY CODE.**
 > This file tells you exactly how to use fog-context tools, in what order, and most importantly — how to maintain the knowledge layers so future sessions don't start from zero.
@@ -9,25 +9,47 @@
 
 This is the most important section. Violating it = **FAILED HANDOFF**.
 
-### SESSION START (run BOTH, in order)
+### STEP 0: Get Your fog_id (before ANY other MCP call)
+
+**Path A — Project already indexed (fastest):**
+```bash
+# Read directly from filesystem (no MCP call needed)
+cat {project_root}/.fog-context/config.toml
+# fog_id = "fog_019506a8b3f8..."
 ```
-fog_brief({})       → verify active project name, path, fog_id, DB size
-                      If project is wrong: call with { "project": "<fog_id or name>" }
-fog_domains({})     → load domain map before touching any code
+
+**Path B — Project already indexed but no shell access:**
+```
+fog_brief({ "project": "/absolute/path/to/project" })
+# First line of response: fog_id: `fog_019506...`  ← capture this
+```
+
+**Path C — Project NOT yet indexed (first time):**
+```
+fog_scan({ "project": "/absolute/path/to/project" })
+# Response table: | fog_id | `fog_019506a8b3f8...` |  ← capture this
+```
+
+> ⚠️ **Once you have fog_id: use it in EVERY subsequent call.**
+> `{ "project": "fog_019506a8b3f8..." }` — this is the only routing key that cannot cause contamination.
+
+### STEP 1: Verify + Load domain map
+```
+fog_brief({ "project": "<fog_id>" })     → verify correct project, index fresh?
+fog_domains({ "project": "<fog_id>" })   → load domain map before touching code
 ```
 
 ### SESSION END (MANDATORY before reporting "done")
 ```
-fog_decisions({ "functions": ["fn_a", "fn_b"], "reason": "why this changed" })
+fog_decisions({ "project": "<fog_id>", "functions": ["fn_a"], "reason": "why" })
 ```
 
-If you discovered any cross-language or runtime binding that the static graph cannot capture (e.g. REST API calls, DI wiring, macro expansions), ALSO record:
+If you discovered cross-language or runtime bridges (REST, DI, macros), also:
 ```
-fog_constraints({ "code": "HINT_<NAME>", "statement": "fetch('/api/users') in frontend → UserController.index()" })
+fog_constraints({ "project": "<fog_id>", "code": "HINT_<NAME>", "statement": "fetch('/api/users') → UserController.index()" })
 ```
 
 > ⚠️ **Reporting task complete WITHOUT calling fog_decisions = FAILED HANDOFF.**
-> This is non-negotiable. The knowledge graph degrades every time this is skipped.
 
 ---
 
@@ -68,24 +90,44 @@ fog_constraints({ "code": "HINT_DI_UserRepo", "statement": "@Autowired IUserRepo
 
 ## 2. Project Routing
 
-fog-context supports multiple registered projects. To work with a specific project:
+fog-context uses **fog_id** as the stable, unique routing key. Pass it with every call in multi-project setups.
 
-**Option A — Pass `project` arg to any tool:**
-```
-fog_brief({ "project": "cashew" })
-fog_lookup({ "query": "auth", "project": "cashew" })
-```
-`project` accepts: fog_id (UUID), project name, or path suffix. Resolved from `~/.fog/registry.json`.
+**Where to find fog_id:**
+```bash
+# Option 1: read from file (fastest, no MCP)
+cat /path/to/project/.fog-context/config.toml  # fog_id = "fog_..."
 
-**Option B — environment variable (for IDE/CI config):**
+# Option 2: from fog_brief response (first line)
+fog_brief({ "project": "/absolute/path" })      # → fog_id: `fog_...`
+
+# Option 3: first-time index
+fog_scan({ "project": "/absolute/path" })       # → response includes fog_id
+
+# Option 4: list all registered projects  
+fog_roots({})                                   # → table with fog_id column
+```
+
+**Using fog_id in calls:**
+```
+fog_brief({ "project": "fog_019506a8b3f8..." })
+fog_lookup({ "query": "auth", "project": "fog_019506a8b3f8..." })
+```
+fog_id accepts: full ID (e.g. `fog_019506a8b3f812a40003`) OR short name OR path suffix.
+
+**Single-project setup (--project at startup):**
 ```json
-{ "env": { "FOG_PROJECT": "/path/to/project" } }
+{ "fog-context": { "command": "/path/to/fog-mcp-server", "args": ["--project", "/abs/path"] } }
 ```
+In this setup, omitting `project` arg is OK (server has a default).
 
-**Option C — explicit `--project` flag (single-project setups):**
+**Multi-project setup (no --project at startup):**
 ```json
-{ "args": ["--project", "/path/to/project"] }
+{ "fog-context": { "command": "/path/to/fog-mcp-server" } }
 ```
+In this setup, **every call MUST include `"project": "<fog_id>"`** or server returns ESCALATE_NO_DEFAULT_PROJECT.
+
+> ⚠️ Do NOT use `FOG_PROJECT` env var — it was removed in v0.6.2 because it caused
+> multi-agent routing contamination (process-global state shared across all sessions).
 
 ---
 
@@ -150,7 +192,7 @@ When multiple agents work on the same mono-repo or across related projects simul
 
 ### Projects are isolated by design
 - Each project has its own `.fog-context/context.db`
-- A single MCP process can serve up to 8 projects concurrently (DbPool)
+- A single MCP process can serve up to **4 projects** concurrently (DbPool with LRU eviction)
 - **Always pass `"project"` arg** when running multiple agents
 
 ### Startup sequence (each agent)
@@ -231,3 +273,35 @@ Example `.fog-context/hints/java.json`:
 
 > **Commit hint files** to keep them versioned with the project:
 > Add `!.fog-context/hints/` to `.gitignore` exceptions (fog-context does this automatically).
+
+---
+
+## 8. Version Check — How to Detect a New Binary
+
+When a new `fog-mcp-server` binary is dropped in `~/.fog/bin/`, agents and users need to know.
+
+**Automatic detection via `fog_brief`:**
+```
+fog_brief({ "project": "<fog_id>" })
+```
+Response header shows:
+```
+# fog-context v0.6.3 — Status
+## 🔑 Project Identity
+...
+Indexed by: v0.6.2
+
+> 🆕 New binary detected! Binary: `v0.6.3` | Index built by: `v0.6.2`
+> Run fog_scan({ "project": "..." }) to refresh the index with the new version.
+```
+
+**Rule:**
+- `Indexed by` == binary version → index is current, no action needed
+- `Indexed by` < binary version → **run `fog_scan`** to rebuild with new parser/features
+- `Indexed by` missing → project never indexed → **run `fog_scan`** first
+
+**CLI alternative:**
+```bash
+fog-mcp-server index --project /path/to/project
+```
+Outputs the binary version used and rebuilds the index.

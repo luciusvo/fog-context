@@ -72,6 +72,15 @@ pub fn run_scan(
     ingest::write_agents_md(project_root, scanned.len(), stats.symbols_created, elapsed);
 
     // Step 4: Register project in global ~/.fog/registry.json
+    // Fix 2b: ensure fog_id is generated NOW (eager, before registry upsert)
+    // so it's available in the response even if registry call fails.
+    let fog_id = crate::registry::ensure_project_id(&project_root.to_string_lossy());
+    // C1: Record the binary version that indexed this project → fog_brief can detect stale index
+    {
+        let mut cfg = crate::registry::ProjectConfig::load(project_root);
+        cfg.indexer_version = Some(env!("CARGO_PKG_VERSION").to_string());
+        cfg.save(project_root);
+    }
     // E2 fix: Query TOTAL symbols from DB (not delta) so re-scans don't show symbol_count=0
     {
         let name = project_root
@@ -79,12 +88,27 @@ pub fn run_scan(
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| "unknown".into());
         let path = project_root.to_string_lossy().into_owned();
-        // Query actual total from DB - incremental scan may have symbols_created=0
         let total_symbols = db.total_symbols();
         let mut reg = Registry::load();
         reg.upsert_with_warnings(name, path, total_symbols, stats.query_errors.clone());
         eprintln!("[fog] Registry updated: {} total symbols", total_symbols);
     }
+
+    // A3: Large repo advisory — scanned.len() > 1000 files
+    let large_repo_warning = if scanned.len() > 1000 {
+        format!(
+            "\n\n> ⚠️ **Large repo ({} files detected)**\n\
+             > For faster future updates, prefer CLI indexing:\n\
+             > ```bash\n\
+             > fog-mcp-server index --project {}\n\
+             > ```\n\
+             > This runs with visible progress and avoids MCP timeouts.",
+            scanned.len(),
+            project_root.display()
+        )
+    } else {
+        String::new()
+    };
 
     // #12b: Up-to-date detection — if nothing changed AND no errors, say so clearly
     // "0 indexed" is ambiguous: it could mean OK or catastrophic failure.
@@ -115,14 +139,26 @@ pub fn run_scan(
 
     ToolCallResult::ok(format!(
         "# fog_scan Complete ✅\n\
-         - **Project:** {}\n\
+         \n\
+         ## 🔑 Project Identity\n\
+         | Field | Value |\n\
+         |-------|-------|\n\
+         | **fog_id** | `{fog_id}` |\n\
+         | **Path** | `{path}` |\n\
+         | **Config** | `{path}/.fog-context/config.toml` |\n\
+         \n\
+         > 💡 **Save this fog_id** — use it in ALL subsequent calls to ensure correct project routing:\n\
+         > `{{ \"project\": \"{fog_id}\" }}`\n\
+         \n\
+         ## Indexing Results\n\
          - **Files:** {total} scanned, {indexed} indexed, {deleted} deleted\n\
-         - **Symbols (new):** {syms}\n\
+         - **Symbols (new this scan):** {syms}\n\
          - **Edges:** {intra} intra-file + {cross} cross-file = {total_edges} total\n\
          - **Elapsed:** {elapsed}ms\n\
          \n\
-         Next: Use fog_lookup, fog_inspect, fog_impact to explore.{warnings}",
-        project_root.display(),
+         Next: `fog_lookup`, `fog_inspect`, `fog_impact` to explore the graph.{warnings}{large_repo}",
+        fog_id = fog_id,
+        path = project_root.display(),
         total = scanned.len(),
         indexed = stats.files_indexed,
         deleted = stats.files_deleted,
@@ -130,6 +166,7 @@ pub fn run_scan(
         intra = stats.edges_intra,
         cross = stats.edges_cross,
         total_edges = stats.edges_intra + stats.edges_cross,
+        large_repo = large_repo_warning,
     ))
 }
 

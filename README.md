@@ -1,6 +1,6 @@
 # fog-context - Agentic Codebase Intelligence Engine
 
-> **v0.6.1** | Zero runtime dependency | <5ms cold start | 14 MCP Tools | Rust
+> **v0.6.2** | Zero runtime dependency | <5ms cold start | 14 MCP Tools | Rust
 
 fog-context is a **dual-mode binary** that serves as the memory backbone for AI agents working on large codebases. It provides a 5-layer knowledge graph via the Model Context Protocol (MCP), integrating with Cursor, Cline, Claude Desktop, and Zed.
 

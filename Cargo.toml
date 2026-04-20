@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version     = "0.6.1"
+version     = "0.6.2"
 edition     = "2021"
 rust-version = "1.75"
 license     = "MIT"
@@ -49,6 +49,9 @@ tree-sitter-lua         = "0.5"
 
 # Error / Logging
 tracing    = "0.1"
+
+# OS / System
+libc       = "0.2"
 
 # Testing
 tempfile   = "3"

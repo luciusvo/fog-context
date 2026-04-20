@@ -49,48 +49,114 @@ use registry::Registry;
 
 /// Caches open MemoryDb instances keyed by project root PathBuf.
 /// Allows any tool to route to the correct project via `args["project"]`.
+///
+/// Memory management:
+/// - LRU eviction: least-recently-used non-default connection is evicted when pool is full.
+/// - Idle TTL: connections unused for > IDLE_TTL_SECS are closed on next gc_idle() call.
+/// - max_open: capped at 4 (was 8) — each SQLite connection uses ~2MB page cache.
 struct DbPool {
-    /// Map of project_root → open DB connection
-    pools: std::collections::HashMap<PathBuf, Arc<Mutex<MemoryDb>>>,
-    /// Default project root (set at startup from FOG_PROJECT / CWD resolution)
-    default_root: PathBuf,
+    /// Map of project_root → (db, last_used_instant)
+    pools: std::collections::HashMap<PathBuf, (Arc<Mutex<MemoryDb>>, std::time::Instant)>,
+    /// LRU order: front = least recently used, back = most recently used
+    lru: std::collections::VecDeque<PathBuf>,
+    /// Default project root. None = multi-project mode, no implicit default.
+    default_root: Option<PathBuf>,
+    /// Maximum number of simultaneously open connections.
+    max_open: usize,
 }
 
+/// Close connections idle longer than this duration.
+const IDLE_TTL_SECS: u64 = 600; // 10 minutes
+
 impl DbPool {
-    fn new(default_root: PathBuf, default_db: Arc<Mutex<MemoryDb>>) -> Self {
+    fn new(default_root: Option<PathBuf>, default_db: Option<Arc<Mutex<MemoryDb>>>) -> Self {
         let mut pools = std::collections::HashMap::new();
-        pools.insert(default_root.clone(), default_db);
-        Self { pools, default_root }
+        let mut lru = std::collections::VecDeque::new();
+        if let (Some(ref root), Some(db)) = (&default_root, default_db) {
+            pools.insert(root.clone(), (db, std::time::Instant::now()));
+            lru.push_back(root.clone());
+        }
+        Self { pools, lru, default_root, max_open: 4 }
     }
 
-    /// Get cached DB for `root`, or open a new one. Max 8 connections.
+    /// Record access for LRU tracking.
+    fn touch(&mut self, root: &Path) {
+        self.lru.retain(|p| p != root);
+        self.lru.push_back(root.to_path_buf());
+        if let Some((_, ref mut ts)) = self.pools.get_mut(root) {
+            *ts = std::time::Instant::now();
+        }
+    }
+
+    /// Close connections that have been idle longer than IDLE_TTL_SECS.
+    /// Keeps the default connection alive regardless of idle time.
+    fn gc_idle(&mut self) {
+        let ttl = std::time::Duration::from_secs(IDLE_TTL_SECS);
+        let default = self.default_root.clone();
+        let to_remove: Vec<PathBuf> = self.pools.iter()
+            .filter(|(path, (_, ts))| {
+                let is_default = default.as_deref() == Some(path.as_path());
+                !is_default && ts.elapsed() > ttl
+            })
+            .map(|(k, _)| k.clone())
+            .collect();
+        for k in to_remove {
+            self.pools.remove(&k);
+            self.lru.retain(|p| p != &k);
+            eprintln!("[fog-pool] Closed idle connection: {}", k.display());
+        }
+    }
+
+    /// Evict the least-recently-used non-default connection.
+    fn evict_lru(&mut self) {
+        let default = self.default_root.as_deref();
+        let candidate = self.lru.iter()
+            .find(|p| default != Some(p.as_path()))
+            .cloned();
+        if let Some(k) = candidate {
+            self.pools.remove(&k);
+            self.lru.retain(|p| p != &k);
+            eprintln!("[fog-pool] LRU evicted: {}", k.display());
+        }
+    }
+
+    /// Force-close a specific connection (e.g., after fog_scan to release write lock).
+    /// Next get_or_open() will reopen clean.
+    pub fn evict(&mut self, root: &Path) {
+        self.pools.remove(root);
+        self.lru.retain(|p| p != root);
+    }
+
+    /// Get cached DB for `root`, or open a new one.
     fn get_or_open(&mut self, root: &Path) -> Arc<Mutex<MemoryDb>> {
-        if let Some(db) = self.pools.get(root) {
-            return db.clone();
+        // GC idle connections on every access (no background thread needed)
+        self.gc_idle();
+
+        if let Some((db, _)) = self.pools.get(root) {
+            let db = db.clone();
+            self.touch(root);
+            return db;
         }
-        // Evict oldest non-default connection if pool is full
-        if self.pools.len() >= 8 {
-            let to_remove = self.pools.keys()
-                .find(|k| **k != self.default_root)
-                .cloned();
-            if let Some(k) = to_remove { self.pools.remove(&k); }
+        // Pool full → LRU eviction
+        if self.pools.len() >= self.max_open {
+            self.evict_lru();
         }
-        // Open DB — fall back to in-memory empty on error
         let db = create_or_open_db(root)
             .or_else(|_| open_from_project(root))
             .unwrap_or_else(|_| fog_memory::db::MemoryDb::open_empty()
                 .expect("in-memory fallback must always succeed"));
         let arc = Arc::new(Mutex::new(db));
-        self.pools.insert(root.to_path_buf(), arc.clone());
+        self.pools.insert(root.to_path_buf(), (arc.clone(), std::time::Instant::now()));
+        self.lru.push_back(root.to_path_buf());
         arc
     }
 
-    fn get_default(&self) -> Arc<Mutex<MemoryDb>> {
-        self.pools[&self.default_root].clone()
+    fn get_default(&self) -> Option<Arc<Mutex<MemoryDb>>> {
+        self.default_root.as_ref().and_then(|r| self.pools.get(r).map(|(db, _)| db.clone()))
     }
 
-    fn default_root(&self) -> &Path {
-        &self.default_root
+    fn default_root(&self) -> Option<&Path> {
+        self.default_root.as_deref()
     }
 }
 
@@ -209,7 +275,6 @@ fn handle_tools_call(
                     let db = pool.get_or_open(&as_path);
                     (db, as_path)
                 } else {
-                    // Fail-loud: unknown project, not a valid path, not a scan tool.
                     let known = registry.list_names();
                     let known_str = if known.is_empty() {
                         "(none — run fog_scan in a project directory first)".to_string()
@@ -224,7 +289,8 @@ fn handle_tools_call(
                          1. Run fog_scan in the project root to register it first.\n\
                          2. Use the exact registered name/fog_id shown above.\n\
                          3. Omit `project` arg to use default: {}",
-                        pool.default_root().display()
+                        pool.default_root().map(|p| p.display().to_string())
+                            .unwrap_or_else(|| "(none)".to_string())
                     ));
                     return json!({
                         "content": result.content,
@@ -234,10 +300,45 @@ fn handle_tools_call(
             }
         }
     } else {
-        (pool.get_default(), pool.default_root().to_path_buf())
+        // No explicit `project` arg — use default if available
+        match (pool.get_default(), pool.default_root()) {
+            (Some(db), Some(root)) => (db, root.to_path_buf()),
+            _ => {
+                // No default configured (multi-project mode without --project)
+                // Fail-loud: agent must pass explicit project arg
+                let known = registry.list_names();
+                let known_str = if known.is_empty() {
+                    "(none — run fog_scan with project path first)".to_string()
+                } else {
+                    known.iter().map(|n| format!("  - `{n}`")).collect::<Vec<_>>().join("\n")
+                };
+                let result = crate::protocol::ToolCallResult::err(format!(
+                    "ESCALATE_NO_DEFAULT_PROJECT\n\
+                     No default project configured. fog-context is running in multi-project mode.\n\n\
+                     You must pass a fog_id or project name with every call:\n\
+                     Example: {{ \"project\": \"fog_019506a8b3f8...\" }}\n\n\
+                     Known projects:\n{known_str}\n\n\
+                     ℹ️  First time? Bootstrap a project:\n\
+                     1. fog_scan({{ \"project\": \"/absolute/path/to/project\" }})\n\
+                     2. Capture the fog_id from the response.\n\
+                     3. Pass it in all subsequent calls."
+                ));
+                return json!({
+                    "content": result.content,
+                    "isError": result.is_error,
+                });
+            }
+        }
     };
 
     let result = router::dispatch(tool_name, args, &effective_db, &effective_root, registry);
+
+    // A4: After fog_scan, evict the write-heavy connection so the next query
+    // gets a fresh reader. Prevents query-tools from blocking on scan's WAL.
+    if tool_name == "fog_scan" && !result.is_error {
+        pool.evict(&effective_root);
+    }
+
     json!({
         "content": result.content,
         "isError": result.is_error,
@@ -256,37 +357,33 @@ fn handle_tools_call(
 ///   P1: Explicit --project arg
 ///   P2: CWD has .fog-context/ → valid project root
 ///   P3: Walk up ancestors to find .fog-context/
-///   P4: FOG_PROJECT env var (for headless agents / CI)
-///   P5: CWD fallback with WARNING log
-fn resolve_project_root(explicit: Option<PathBuf>) -> PathBuf {
+///   [REMOVED P4: FOG_PROJECT env var — caused multi-agent routing contamination]
+/// Returns None in MCP mode when no project is resolvable (multi-project setup).
+/// Returns CWD fallback in CLI mode only.
+fn resolve_project_root_opt(explicit: Option<PathBuf>, is_cli: bool) -> Option<PathBuf> {
     // P1: Explicit --project arg
     if let Some(p) = explicit {
-        return p;
+        return Some(p);
     }
 
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
     // P2/P3: Probe CWD and ancestors for .fog-context/
     if let Some(root) = find_project_root_from(&cwd) {
-        return root;
+        return Some(root);
     }
 
-    // P4: FOG_PROJECT env var
-    if let Ok(p) = std::env::var("FOG_PROJECT") {
-        let path = PathBuf::from(&p);
-        if path.exists() {
-            eprintln!("[fog-context] Using FOG_PROJECT env: {}", path.display());
-            return path;
-        } else {
-            eprintln!("[fog-context] WARNING: FOG_PROJECT='{}' does not exist, ignoring.", p);
-        }
+    // CLI mode only: CWD fallback (human running a command from a directory)
+    if is_cli {
+        eprintln!("[fog-context] INFO: No .fog-context/ found. Using CWD: {}", cwd.display());
+        eprintln!("[fog-context]      Run fog_scan to index this directory.");
+        return Some(cwd);
     }
 
-    // P5: CWD fallback — warn clearly
-    eprintln!("[fog-context] INFO: No .fog-context/ found from CWD '{}'.", cwd.display());
-    eprintln!("[fog-context]      Will create new project index here on fog_scan.");
-    eprintln!("[fog-context]      Or set: FOG_PROJECT=/path/to/repo  to point to existing project.");
-    cwd
+    // MCP mode: no fallback — callers must pass explicit project arg per-request
+    eprintln!("[fog-context] Starting in multi-project mode (no default project).");
+    eprintln!("[fog-context] Pass fog_id with every call: {{ \"project\": \"fog_...\" }}");
+    None
 }
 
 /// Walk up directory tree from `start` looking for a `.fog-context/` subdirectory.
@@ -316,12 +413,22 @@ fn find_project_root_from(start: &Path) -> Option<PathBuf> {
 async fn main() {
     let args = parse_args();
 
-    // Resolve project root
-    let project_root = resolve_project_root(args.project);
+    // Determine if this is CLI (non-interactive) mode or MCP server mode
+    let is_cli = !matches!(args.cmd, Cmd::Serve);
+
+    // Resolve project root — None = multi-project MCP mode (no default)
+    let project_root_opt = resolve_project_root_opt(args.project, is_cli);
 
     // ===========================================================
     // CLI sub-command dispatch (non-interactive, exits when done)
     // ===========================================================
+    // CLI sub-commands need a resolved project root — exit if none found
+    let cli_root = || -> PathBuf {
+        project_root_opt.clone().unwrap_or_else(|| {
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+        })
+    };
+
     match args.cmd {
         Cmd::ListTools => {
             let tools = router::list_tools();
@@ -333,11 +440,14 @@ async fn main() {
         }
 
         Cmd::Index { full } => {
+            let project_root = cli_root();
             eprintln!("[fog] Indexing: {} (full={})", project_root.display(), full);
-            // create_or_open_db: bootstraps .fog-context/context.db if first run
             let db = create_or_open_db(&project_root).unwrap_or_else(|e| {
                 eprintln!("[fog] DB error: {e}"); std::process::exit(1);
             });
+            // Fix 2: eager fog_id — generate it now, before index runs
+            let fog_id = crate::registry::ensure_project_id(&project_root.to_string_lossy());
+            eprintln!("[fog] fog_id: {fog_id}");
             let result = crate::indexer::run_scan(&project_root, &db, full);
             if result.is_error {
                 eprintln!("[fog] Index failed.");
@@ -349,6 +459,7 @@ async fn main() {
         }
 
         Cmd::Stats => {
+            let project_root = cli_root();
             let db = open_from_project(&project_root).unwrap_or_else(|e| {
                 eprintln!("[fog] DB error: {e}"); std::process::exit(1);
             });
@@ -366,6 +477,7 @@ async fn main() {
         }
 
         Cmd::Export { ref format } => {
+            let project_root = cli_root();
             let db = open_from_project(&project_root).unwrap_or_else(|e| {
                 eprintln!("[fog] DB error: {e}"); std::process::exit(1);
             });
@@ -376,10 +488,7 @@ async fn main() {
             let text = result.content.first().map(|c| c.text.as_str()).unwrap_or("{}");
             println!("{text}");
             return;
-
         }
-
-
 
         Cmd::Serve => {} // fall through to MCP loop
     }
@@ -387,26 +496,64 @@ async fn main() {
     // ===========================================================
     // MCP Server Mode (default)
     // ===========================================================
+
+    // A1: Close inherited file descriptors from Electron parent process.
+    // Electron spawns fog-mcp-server and passes all its FDs (LevelDB, GPU cache, etc.).
+    // We only need stdin(0), stdout(1), stderr(2).
+    // Linux 5.9+: close_range(3, u32::MAX, 0) closes all FDs >= 3 atomically.
+    #[cfg(target_os = "linux")]
+    unsafe {
+        // CLOSE_RANGE_CLOEXEC not needed since we're closing, not marking
+        // SYS_close_range = 436 on x86_64
+        let ret = libc::syscall(436, 3u32, u32::MAX, 0u32);
+        if ret < 0 {
+            // Fallback: iterate /proc/self/fd and close individually
+            if let Ok(dir) = std::fs::read_dir("/proc/self/fd") {
+                for entry in dir.flatten() {
+                    if let Ok(fd_str) = entry.file_name().into_string() {
+                        if let Ok(fd) = fd_str.parse::<i32>() {
+                            if fd > 2 {
+                                let _ = libc::close(fd);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+    // Open default DB (only if a project root was resolved)
+    // Fix 2: also ensure fog_id exists immediately — before index runs
     let registry = Registry::load();
 
-    // Open default DB - use create_or_open_db so fog_scan can work on a fresh project
-    // without requiring the user to run CLI `index` first.
-    let db_result = create_or_open_db(&project_root);
-    let default_db: Arc<Mutex<MemoryDb>> = match db_result {
-        Ok(db) => {
-            eprintln!("[fog-context] Project: {}", project_root.display());
-            Arc::new(Mutex::new(db))
+    let (default_db, default_root) = match project_root_opt {
+        Some(ref root) => {
+            // Eager fog_id: generate now so agents can capture it from fog_brief
+            let fog_id = crate::registry::ensure_project_id(&root.to_string_lossy());
+            let db = match create_or_open_db(root) {
+                Ok(db) => {
+                    eprintln!("[fog-context] Default project: {} (fog_id: {})", root.display(), fog_id);
+                    Arc::new(Mutex::new(db))
+                }
+                Err(e) => {
+                    eprintln!("[fog-context] Warning: DB not available ({e}). Run fog_scan to index.");
+                    Arc::new(Mutex::new(
+                        fog_memory::db::MemoryDb::open_empty()
+                            .expect("in-memory fallback must always succeed")
+                    ))
+                }
+            };
+            (Some(db), project_root_opt)
         }
-        Err(e) => {
-            eprintln!("[fog-context] Warning: DB not available ({}). Run fog_scan to index first.", e);
-            let fallback = fog_memory::db::MemoryDb::open_empty()
-                .expect("in-memory fallback DB must always succeed");
-            Arc::new(Mutex::new(fallback))
+        None => {
+            // Multi-project mode: no default
+            (None, None)
         }
     };
 
     // #1: Wrap in DbPool for multi-project routing
-    let mut pool = DbPool::new(project_root.clone(), default_db);
+    let mut pool = DbPool::new(default_root, default_db);
 
     eprintln!("[fog-context] Ready. Listening for MCP requests on stdin...");
 

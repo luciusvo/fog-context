@@ -551,17 +551,40 @@ pub fn write_agents_md(root: &Path, files: usize, symbols: usize, elapsed_ms: u1
          ## fog-context MCP - Agent Instructions\n\
          > Auto-generated {now} | {files} files · {symbols} symbols · indexed in {elapsed_ms}ms\n\
          \n\
-         ### MANDATORY: Start every session with these 2 calls\n\
+         ### MANDATORY: Start every session\n\
+         \n\
+         **Step 0 — Get fog_id (before any other call):**\n\
+         ```bash\n\
+         # Fastest: read from file\n\
+         cat .fog-context/config.toml   # fog_id = \"fog_...\"\n\
+         \n\
+         # Or via MCP:\n\
+         fog_brief({{ \"project\": \"/absolute/path\" }})   # → fog_id shown at top\n\
          ```\n\
-         fog_roots({{}})   → discover registered projects\n\
-         fog_brief({{}})   → confirm index fresh. symbols=0 → call fog_scan first\n\
+         \n\
+         **Step 1 — Verify project + load domain map:**\n\
+         ```\n\
+         fog_brief({{ \"project\": \"<fog_id>\" }})   → verify project, check version\n\
+         fog_domains({{ \"project\": \"<fog_id>\" }}) → load business domain map\n\
          ```\n\
          \n\
          ### Tool Order\n\
          1. **Orient:** fog_domains → fog_lookup\n\
          2. **Understand:** fog_inspect → fog_trace\n\
-         3. **Before edit:** fog_impact (HIGH/CRITICAL → warn user)\n\
-         4. **After edit:** fog_decisions (record WHY){onboarding}"
+         3. **Before edit:** fog_impact (HIGH/CRITICAL → warn user first)\n\
+         4. **After edit:** fog_decisions {{ functions, reason, revert_risk }} (**MANDATORY**)\n\
+         \n\
+         ### Version Check\n\
+         `fog_brief` shows: `Indexed by: v0.6.x`\n\
+         If binary version ≠ indexed version → 🆕 banner appears → run fog_scan to refresh.\n\
+         \n\
+         ### Large Repos (>1000 files)\n\
+         Prefer CLI for initial index (shows progress, no MCP timeout):\n\
+         ```bash\n\
+         fog-mcp-server index --project /path/to/project\n\
+         ```\n\
+         Then use MCP tools for all queries.{onboarding}\n\
+         <!-- /fog-context -->"
     );
     let _ = std::fs::write(&agents_path, format!("{prefix}{section}"));
 }

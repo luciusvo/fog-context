@@ -180,12 +180,16 @@ pub fn open_shared_db(project_root: &Path) -> MemoryResult<MemoryDb> {
     let conn = Connection::open(&db_path)
         .map_err(MemoryError::Database)?;
 
-    // Configure connection for best performance + concurrent access
+    // Configure connection for best performance + memory efficiency
+    // cache_size=-2000 → 2MB page cache (default is 8MB) — 4× reduction in multi-project setups
+    // mmap_size=0      → disable memory-mapped I/O — avoids holding large VA ranges per connection
     conn.execute_batch(
         "PRAGMA journal_mode = WAL;
          PRAGMA foreign_keys = ON;
          PRAGMA busy_timeout = 5000;
-         PRAGMA synchronous = NORMAL;",
+         PRAGMA synchronous = NORMAL;
+         PRAGMA cache_size = -2000;
+         PRAGMA mmap_size = 0;",
     ).map_err(MemoryError::Database)?;
 
     // Verify schema version before any operation

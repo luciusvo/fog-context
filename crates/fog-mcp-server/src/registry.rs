@@ -198,6 +198,9 @@ pub struct ProjectConfig {
     pub fog_id: Option<String>,
     pub name: Option<String>,
     pub adr_paths: Vec<String>,
+    /// Version of fog-mcp-server binary that last indexed this project.
+    /// Used by fog_brief to detect when binary is newer than index.
+    pub indexer_version: Option<String>,
 }
 
 impl ProjectConfig {
@@ -229,6 +232,10 @@ impl ProjectConfig {
         }
         if let Some(ref name) = self.name {
             lines.push(format!("name = \"{}\"", name));
+        }
+        // C1: Track which binary version last indexed this project
+        if let Some(ref ver) = self.indexer_version {
+            lines.push(format!("indexer_version = \"{}\"", ver));
         }
         if !self.adr_paths.is_empty() {
             lines.push(String::new());
@@ -267,6 +274,8 @@ fn parse_config_toml(content: &str) -> ProjectConfig {
                 cfg.fog_id = Some(val);
             } else if let Some(val) = extract_toml_string(line, "name") {
                 cfg.name = Some(val);
+            } else if let Some(val) = extract_toml_string(line, "indexer_version") {
+                cfg.indexer_version = Some(val);
             }
         } else if in_adr {
             if line.starts_with("paths") {
@@ -355,19 +364,29 @@ pub fn read_project_id(project_path: &str) -> Option<String> {
 /// Returns the project UUID (a short random hex string, like "prj_3f8a2c1d").
 pub fn ensure_project_id(project_path: &str) -> String {
     if let Some(id) = read_project_id(project_path) {
-        return id;
+        return id; // Already exists — always reuse; fog_id is immutable
     }
-    let id = {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let t = SystemTime::now().duration_since(UNIX_EPOCH)
-            .unwrap_or_default().subsec_nanos();
-        format!("prj_{:08x}", t)
-    };
+    // Generate a unique fog_id without external crates.
+    // Format: fog_<48-bit ms timestamp><16-bit pid><16-bit monotonic counter>
+    // Example: fog_019506a8b3f812a40003
+    // Collision probability: ~0 in practice (different ms + pid ensures uniqueness)
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+    static COUNTER: AtomicU32 = AtomicU32::new(0);
+    let ts_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let pid = std::process::id();
+    let cnt = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let id = format!("fog_{:012x}{:04x}{:04x}", ts_ms & 0xFFFF_FFFF_FFFF, pid & 0xFFFF, cnt & 0xFFFF);
+
     let root = Path::new(project_path);
-    let mut cfg = ProjectConfig::default();
+    let mut cfg = ProjectConfig::load(root); // preserve existing name/adr_paths
     cfg.fog_id = Some(id.clone());
-    cfg.name = root.file_name()
-        .map(|n| n.to_string_lossy().into_owned());
+    if cfg.name.is_none() {
+        cfg.name = root.file_name().map(|n| n.to_string_lossy().into_owned());
+    }
     cfg.save(root);
     id
 }
