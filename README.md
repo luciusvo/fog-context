@@ -136,6 +136,30 @@ In single-project mode, omitting `"project"` in tool calls is OK — server uses
 
 ---
 
+## Updating the Binary
+
+fog-context includes a built-in Version Check mechanism. Every time you or the AI calls `fog_brief`, it compares the running binary's version against the `indexer_version` saved in the project's `.fog-context/config.toml`. If there is a mismatch, `fog_brief` will display a `🆕 VERSION MISMATCH` banner, signaling that an update has occurred and the project may need to be re-indexed to take advantage of new AST features.
+
+To update to the latest version:
+1. Download the latest release from the [GitHub Releases](https://github.com/luciusvo/fog-context/releases) page for your OS.
+2. Replace your existing binary. By convention, this is located at `~/.fog/bin/fog-mcp-server`.
+
+**Mac / Linux:**
+```bash
+# Download and replace the binary
+mv /path/to/downloaded/fog-mcp-linux-amd64 ~/.fog/bin/fog-mcp-server
+
+# Make it executable again
+chmod +x ~/.fog/bin/fog-mcp-server
+```
+
+**Windows:**
+Replace the old `fog-mcp-windows-amd64.exe` inside your `%USERPROFILE%\.fog\bin\` folder with the newly downloaded `.exe`.
+
+After updating, simply run `fog_scan({ "full": false })` via the AI or `fog-mcp-server index` via CLI to update your project's AST graph to the latest schema!
+
+---
+
 
 ## Adding a New Repo (What AI Agents Should Do)
 
@@ -221,7 +245,7 @@ your-project/
 │   ├── context.db                 ← SQLite knowledge graph (Layers 1-4)
 │   ├── AGENTS.md                  ← Auto-generated agent instructions
 │   └── hints/<lang>.json (opt)    ← Manual bridges for IoC / Metaprogramming
-└── .fog.yml (optional)            ← Custom config (ADR paths, ignore patterns)
+└── .fogignore (optional)          ← Ignore paths from indexing (like .gitignore)
 ```
 
 ### Optional: `.fog-context/hints/<lang>.json` (Framework Magic)
@@ -238,17 +262,30 @@ For frameworks heavily relying on Dependency Injection (IoC), Event Buses, or Me
 }
 ```
 
-### Optional: `.fog.yml` per-project config
+### Ignoring files: `.fogignore`
 
-If your project stores ADRs somewhere other than `logs/decisions/`:
+`fog-context` automatically ignores standard excluded directories (`.git`, `node_modules`, `target`, `dist`, `build`, etc.) and respects your `.gitignore`.
 
-```yaml
-# .fog.yml - fog-context project config (optional)
-adr_paths:
-  - docs/decisions
-  - docs/adr
-  - .agent/decisions
-  - logs/decisions
+If you have valid source code files that you **do not** want indexed (e.g. `Research/`, `examples/`, `experiments/`), simply create a `.fogignore` file at the project root:
+
+```text
+# .fogignore
+Research/
+experiments/
+drafts/
+```
+
+### Custom ADR Paths: `.fog-context/config.toml`
+
+If your project stores ADRs (Architecture Decision Records) somewhere other than standard paths like `logs/decisions/` or `docs/adr/`, you can override this directly in the engine's config file (`.fog-context/config.toml`):
+
+```toml
+# .fog-context/config.toml
+[adr]
+paths = [
+  "docs/architecture",
+  "knowledge/decisions"
+]
 ```
 
 ---
