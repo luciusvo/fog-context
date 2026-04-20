@@ -1,44 +1,51 @@
-# fog-context - Agentic Codebase Intelligence Engine
+# fog-context — Agentic Codebase Intelligence Engine
 
 > **v0.6.5** | Zero runtime dependency | <5ms cold start | 14 MCP Tools | Rust
 
-fog-context is a **dual-mode binary** that serves as the memory backbone for AI agents working on large codebases. It provides a 5-layer knowledge graph via the Model Context Protocol (MCP), integrating with Cursor, Cline, Claude Desktop, and Zed.
+fog-context is a **dual-mode binary** (MCP server + CLI) that serves as the memory backbone for AI agents working on large codebases. It builds a persistent 5-layer knowledge graph and integrates with Cursor, Cline, Claude Desktop, and Zed.
 
 ---
 
-## One-time Global Setup (Do this once per machine)
+## 📋 Overview
 
-fog-context uses a **single universal binary** at `~/.fog/bin/fog-mcp-server` shared across all your repos. You only install once - every project just points to the same binary.
+- [Initial Setup](#-initial-setup) — Install the binary and configure your AI editor (one-time per machine)
+- [Per-project Setup](#-per-project-setup) — Initialize a project, control what gets indexed
+- [Daily Usage](#-daily-usage) — Updating the binary, adding new repos, CLI reference
+- [For AI Agents](#-for-ai-agents) — Mandatory session protocol and tool reference
+- [Reference](#-reference) — Language support, 5-layer architecture, tool list
 
-### Step 1: Download and verify the binary
+---
+
+## 🔧 Initial Setup
+
+> Do this **once per machine**. Every project then shares the same binary.
+
+### Step 1: Download the binary
+
+fog-context uses a **single universal binary** at `~/.fog/bin/fog-mcp-server` shared across all your repos.
 
 ```bash
 # Create the fog home directory
 mkdir -p ~/.fog/bin
 
-# Download the binary for your platform
 # Linux (x86_64)
 curl -L https://github.com/luciusvo/fog-context/releases/latest/download/fog-mcp-linux-amd64 \
   -o ~/.fog/bin/fog-mcp-server && chmod +x ~/.fog/bin/fog-mcp-server
 
-# macOS Apple Silicon (M1/M2/M3)
+# macOS Apple Silicon (M1/M2/M3/M4)
 curl -L https://github.com/luciusvo/fog-context/releases/latest/download/fog-mcp-macos-arm64 \
-  -o ~/.fog/bin/fog-mcp-server && chmod +x ~/.fog/bin/fog-mcp-server
-
-# macOS Intel
-curl -L https://github.com/luciusvo/fog-context/releases/latest/download/fog-mcp-macos-amd64 \
   -o ~/.fog/bin/fog-mcp-server && chmod +x ~/.fog/bin/fog-mcp-server
 ```
 
-**Verify the binary works** (mandatory before proceeding):
+**Windows:** Download `fog-mcp-windows-amd64.exe` from [GitHub Releases](https://github.com/luciusvo/fog-context/releases) and place it at `%USERPROFILE%\.fog\bin\`.
+
+**Verify the binary works:**
 ```bash
 ls -la ~/.fog/bin/fog-mcp-server
 # Expected: -rwxr-xr-x ... fog-mcp-server
-# If permission denied: chmod +x ~/.fog/bin/fog-mcp-server
 
 ~/.fog/bin/fog-mcp-server stats --project /tmp 2>&1 | head -3
-# Expected: "fog-context v0.6.x - Stats for: /tmp" (or DB error — both confirm binary works)
-# If "command not found": the download failed, retry the curl command above
+# Expected: "fog-context v0.6.x - Stats for: /tmp"
 ```
 
 After install, your fog home directory looks like:
@@ -49,19 +56,18 @@ After install, your fog home directory looks like:
 │   └── fog-mcp-server     ← Universal binary (shared by all repos)
 ├── logs/
 │   └── parser_errors.log  ← Global telemetry for AST query crashes
-└── registry.json          ← Auto-created on first fog_brief or CLI index.
+└── registry.json          ← Auto-created on first fog_brief or CLI index
 ```
 
 > [!NOTE]
 > `registry.json` is created automatically the FIRST time you run either `fog_brief` (via MCP)
 > or `fog-mcp-server index --project /path` (via CLI). It is NOT created at install time.
 
-### Step 2: Configure your AI editor (one-time, works for ALL repos)
+---
+
+### Step 2: Configure your AI editor
 
 fog-context v0.6.5 uses **explicit per-call routing via `fog_id`**. There is no global env var.
-Choose the setup that matches your workflow:
-
----
 
 #### Scenario A — Multi-project mode (recommended for Antigravity, headless agents)
 
@@ -84,15 +90,11 @@ fog_brief({ "project": "/absolute/path/to/repo" })
 → response shows: fog_id: `fog_019506...`  ← save this
 
 # 2. Use fog_id in all subsequent calls
-fog_brief({ "project": "fog_019506..." })
 fog_lookup({ "query": "auth", "project": "fog_019506..." })
 ```
 
 > [!TIP]
 > The fastest way to get fog_id: `cat /path/to/repo/.fog-context/config.toml`
-> fog_brief registers the project automatically on first call.
-
----
 
 #### Scenario B — Single-project mode (Cursor, Zed, dedicated setups)
 
@@ -109,8 +111,6 @@ Use `--project` when you always work on one repo:
   }
 }
 ```
-
-In single-project mode, omitting `"project"` in tool calls is OK — server uses the configured default.
 
 **Zed** (`~/.config/zed/settings.json`):
 ```json
@@ -130,127 +130,75 @@ In single-project mode, omitting `"project"` in tool calls is OK — server uses
 > `FOG_PROJECT` env var was **removed in v0.6.2** — it caused multi-agent routing contamination.
 > Use `"args": ["--project", "/path"]` instead.
 
-> [!TIP]
-> Call `fog_brief({})` at session start to verify which project fog-context is serving.
-> Output shows **fog_id**, **Name**, **Path**, and whether a **new binary** needs re-indexing.
-
 ---
 
-## Updating the Binary
+## 📁 Per-project Setup
 
-fog-context includes a built-in Version Check mechanism. Every time you or the AI calls `fog_brief`, it compares the running binary's version against the `indexer_version` saved in the project's `.fog-context/config.toml`. If there is a mismatch, `fog_brief` will display a `🆕 VERSION MISMATCH` banner, signaling that an update has occurred and the project may need to be re-indexed to take advantage of new AST features.
-
-To update to the latest version:
-1. Download the latest release from the [GitHub Releases](https://github.com/luciusvo/fog-context/releases) page for your OS.
-2. Replace your existing binary. By convention, this is located at `~/.fog/bin/fog-mcp-server`.
-
-**Mac / Linux:**
-```bash
-# Download and replace the binary
-mv /path/to/downloaded/fog-mcp-linux-amd64 ~/.fog/bin/fog-mcp-server
-
-# Make it executable again
-chmod +x ~/.fog/bin/fog-mcp-server
-```
-
-**Windows:**
-Replace the old `fog-mcp-windows-amd64.exe` inside your `%USERPROFILE%\.fog\bin\` folder with the newly downloaded `.exe`.
-
-After updating, simply run `fog_scan({ "full": false })` via the AI or `fog-mcp-server index` via CLI to update your project's AST graph to the latest schema!
-
----
-
-
-## Adding a New Repo (What AI Agents Should Do)
-
-When you open a new project in your IDE, fog-context is already running. The AI agent needs to initialize the index.
-
-### Agent protocol: starting on a new repo
-
-```
-# Step 0: Get fog_id (always first)
-fog_brief({ "project": "/absolute/path/to/repo" })
-→ Response shows: fog_id + estimated file count
-→ IMPORTANT: if "Large project (~N files detected)" warning shown → use CLI (Step 1b)
-
-# Step 1a: For small/medium repos (< 1000 files) — index via MCP:
-fog_scan({ "project": "<fog_id from fog_brief>" })
-
-# Step 1b: For large repos (> 1000 files) — index via CLI (shows progress):
-# Run in terminal:
-fog-mcp-server index --project /absolute/path/to/repo
-# Then verify:
-fog_brief({ "project": "<fog_id>" })
-
-# Step 2: Verify
-fog_roots({})
-→ Should show this project in the list
-
-# Step 3: Build knowledge layers (mandatory for full intelligence):
-fog_assign({ "domain": "Authentication", "symbols": ["login", "auth_check"] })
-fog_constraints({ "path": "." })    ← scans for ADR files
-fog_decisions({ "functions": ["key_fn"], "reason": "why it works this way" })
-```
-
-### For humans: Quick start on a new repo
-
-```bash
-# Using CLI (runs indexer directly, no MCP client needed)
-~/.fog/bin/fog-mcp-server --project /path/to/your/repo index
-
-# The repo is now registered and ready:
-~/.fog/bin/fog-mcp-server --project /path/to/your/repo stats
-```
-
-### Registry: Track all your indexed repos
-
-```bash
-# See all registered projects:
-cat ~/.fog/registry.json
-```
-
-The registry auto-updates after every `fog_scan`. Example output:
-
-```json
-[
-  {
-    "name": "goclaw",
-    "path": "/home/admin/Downloads/goclaw",
-    "symbol_count": 10824,
-    "last_indexed": "2026-04-19T01:30:00Z",
-    "db_path": "/home/admin/Downloads/goclaw/.fog-context/context.db",
-    "fog_id": "prj_3f8a2c1d"
-  },
-  {
-    "name": "EaseUI-PRD",
-    "path": "/home/admin/Downloads/EaseUI-PRD",
-    "symbol_count": 305,
-    "last_indexed": "2026-04-19T02:15:00Z",
-    "db_path": "/home/admin/Downloads/EaseUI-PRD/.fog-context/context.db",
-    "fog_id": "prj_a1b2c3d4"
-  }
-]
-```
-
----
-
-## Per-project File Structure
-
-After `fog_scan` runs on a project, fog-context creates these files:
+After `fog_scan` runs on a project, fog-context creates these files inside it:
 
 ```
 your-project/
-├── .fog-id                        ← Stable UUID (survives folder renames)
 ├── .fog-context/
 │   ├── context.db                 ← SQLite knowledge graph (Layers 1-4)
 │   ├── AGENTS.md                  ← Auto-generated agent instructions
 │   └── hints/<lang>.json (opt)    ← Manual bridges for IoC / Metaprogramming
-└── .fogignore (optional)          ← Ignore paths from indexing (like .gitignore)
+└── .fogignore (optional)          ← Exclude directories from indexing
 ```
 
-### Optional: `.fog-context/hints/<lang>.json` (Framework Magic)
+---
 
-For frameworks heavily relying on Dependency Injection (IoC), Event Buses, or Metaprogramming (Rails `has_many`), you can supply static hints to bridge edges that the AST cannot naturally see.
+### Controlling What Gets Indexed
+
+#### How the file ignore system works
+
+fog-context uses a layered ignore system — files are filtered in this priority order:
+
+| Layer | Mechanism | What it blocks |
+|:------|:----------|:---------------|
+| 1 | **Built-in hardcoded list** | `.git`, `node_modules`, `target`, `dist`, `build`, `.venv`, `__pycache__`, `.next`, `vendor`, `tmp`, `coverage`, `.fog-context` |
+| 2 | **`.gitignore` / `.ignore`** | Any path listed in your standard gitignore (read automatically) |
+| 3 | **Extension filter** | Any file whose extension is not a supported language (`.md`, `.json`, `.png`, images, etc.) |
+| 4 | **`.fogignore`** | Your custom exclusions — for valid source code dirs you don't want indexed |
+
+> [!IMPORTANT]
+> Layers 1–3 run automatically with zero configuration. **However**, if your project has valid source code
+> directories that should NOT be part of the indexed codebase (e.g. a `Research/` folder with cloned
+> third-party repos, or an `experiments/` directory), you **must** create a `.fogignore` file to exclude them.
+> Without it, fog-context will parse every `.rs`, `.py`, `.ts`… file it finds — even in those directories.
+
+#### Example: when to use `.fogignore`
+
+A project reporting **10,000+ files** but with only ~1,000 real application files is a strong signal.
+This typically happens when the repo contains directories with valid code extensions that aren't part
+of the application (research, snapshots, vendored examples).
+
+```
+# .fogignore  (placed at the project root, same level as .gitignore)
+Research/
+experiments/
+docs/vendor/
+```
+
+`.fogignore` uses the exact same syntax as `.gitignore`. After adding or modifying it, run `fog_scan` with `full=true` to re-index from scratch.
+
+#### Custom ADR Paths
+
+If your project stores ADRs (Architecture Decision Records) somewhere other than the standard paths
+(`logs/decisions/`, `docs/adr/`, `docs/decisions/`), you can override this in `.fog-context/config.toml`:
+
+```toml
+# .fog-context/config.toml
+[adr]
+paths = [
+  "docs/architecture",
+  "knowledge/decisions"
+]
+```
+
+#### Framework Magic: `.fog-context/hints/<lang>.json`
+
+For frameworks using Dependency Injection (IoC), Event Buses, or Metaprogramming (Rails `has_many`),
+AST analysis cannot see the runtime links. Bridge them manually:
 
 ```json
 // .fog-context/hints/csharp.json
@@ -262,35 +210,74 @@ For frameworks heavily relying on Dependency Injection (IoC), Event Buses, or Me
 }
 ```
 
-### Ignoring files: `.fogignore`
+After creating or editing a hints file, run `fog_scan({ "full": false })` to apply.
 
-`fog-context` automatically ignores standard excluded directories (`.git`, `node_modules`, `target`, `dist`, `build`, etc.) and respects your `.gitignore`.
+---
 
-If you have valid source code files that you **do not** want indexed (e.g. `Research/`, `examples/`, `experiments/`), simply create a `.fogignore` file at the project root:
+## 🔄 Daily Usage
 
-```text
-# .fogignore
-Research/
-experiments/
-drafts/
+### Updating the Binary
+
+fog-context has a **built-in version check**: every `fog_brief` call compares the running binary's version
+against `indexer_version` in `.fog-context/config.toml`. A `🆕 VERSION MISMATCH` banner appears if the
+binary is newer than the last index.
+
+**To update:**
+
+1. Download the new release from [GitHub Releases](https://github.com/luciusvo/fog-context/releases)
+2. Replace the existing binary:
+
+**Mac / Linux:**
+```bash
+mv /path/to/downloaded/fog-mcp-linux-amd64 ~/.fog/bin/fog-mcp-server
+chmod +x ~/.fog/bin/fog-mcp-server
 ```
 
-### Custom ADR Paths: `.fog-context/config.toml`
+**Windows:** Replace `fog-mcp-windows-amd64.exe` inside `%USERPROFILE%\.fog\bin\`.
 
-If your project stores ADRs (Architecture Decision Records) somewhere other than standard paths like `logs/decisions/` or `docs/adr/`, you can override this directly in the engine's config file (`.fog-context/config.toml`):
-
-```toml
-# .fog-context/config.toml
-[adr]
-paths = [
-  "docs/architecture",
-  "knowledge/decisions"
-]
+3. Re-index your projects to upgrade the AST graph:
+```bash
+fog_scan({ "full": false })   # via AI
+# or
+~/.fog/bin/fog-mcp-server index --project /path/to/project   # via CLI
 ```
 
 ---
 
-## CLI Reference
+### Adding a New Repo
+
+When you open a new project, the AI agent needs to initialize the index.
+
+**Agent protocol:**
+```
+# Step 0: Get fog_id (always first)
+fog_brief({ "project": "/absolute/path/to/repo" })
+→ Response shows: fog_id + estimated file count
+→ IMPORTANT: if "Large project (~N files detected)" warning shown → use CLI (Step 1b)
+
+# Step 1a: For small/medium repos (< 1000 files) — index via MCP:
+fog_scan({ "project": "<fog_id from fog_brief>" })
+
+# Step 1b: For large repos (> 1000 files) — index via CLI (shows progress):
+fog-mcp-server index --project /absolute/path/to/repo
+# Then verify:
+fog_brief({ "project": "<fog_id>" })
+
+# Step 2: Build knowledge layers (mandatory for full intelligence):
+fog_assign({ "domain": "Authentication", "symbols": ["login", "auth_check"] })
+fog_constraints({ "path": "." })    ← scans for ADR files
+fog_decisions({ "functions": ["key_fn"], "reason": "why it works this way" })
+```
+
+**For humans (CLI):**
+```bash
+~/.fog/bin/fog-mcp-server --project /path/to/your/repo index
+~/.fog/bin/fog-mcp-server --project /path/to/your/repo stats
+```
+
+---
+
+### CLI Reference
 
 ```bash
 # Index a project (first run or after large changes)
@@ -311,49 +298,41 @@ paths = [
 
 ---
 
-## Build from Source
+## 🤖 For AI Agents
 
-```bash
-# Minimum Rust version: 1.75+
-git clone https://github.com/luciusvo/fog-context.git
-cd fog-context
-cargo build --release --package fog-mcp-server
+### Mandatory Session Protocol
 
-# Binary will be at: target/release/fog-mcp-server
-# Copy to universal location:
-cp target/release/fog-mcp-server ~/.fog/bin/fog-mcp-server
+Every AI agent session **must** follow this order:
 
-# With mobile language support (Kotlin/Swift/Dart - requires native C toolchain)
-cargo build --release --package fog-mcp-server --features all-langs
+```
+1. fog_brief({})           → Verify index is fresh (symbols > 0)
+                             If symbols = 0 → call fog_scan first
+2. fog_lookup/domains      → Orient to the codebase
+3. fog_impact({ target })  → Check blast radius BEFORE any edit
+                             If risk = HIGH/CRITICAL → STOP and warn user
+4. fog_decisions({...})    → Record WHY after every significant change
 ```
 
-> **macOS Intel users:** No pre-built binary is provided (the `macos-13` GitHub Actions runner
-> is currently unavailable). Use the command above to build locally - takes ~2 minutes with
-> Rust installed. Alternatively, the ARM64 binary (`fog-mcp-macos-arm64`) runs transparently
-> on Intel Macs via Rosetta 2 (macOS 11+).
-
----
-
-## 14 MCP Tools
+### 14 MCP Tools
 
 | Tool | Purpose | Priority |
 |:---|:---|:---|
-| `fog_brief` | Index health check - **call first every session** | 🔴 Mandatory |
+| `fog_brief` | Index health check — **call first every session** | 🔴 Mandatory |
 | `fog_scan` | Index or re-index project with Tree-sitter | Core |
 | `fog_lookup` | Full-text search for symbols by name/doc | Core |
 | `fog_outline` | Lightweight file outline (names+sigs, no source) | Core |
 | `fog_inspect` | 360° symbol context: callers, callees, constraints | Core |
 | `fog_impact` | Blast radius analysis before any edit | 🔴 Mandatory |
 | `fog_trace` | Full call tree downstream or upstream | Core |
-| `fog_roots` | List all indexed projects in ~/.fog/registry.json | Core |
+| `fog_roots` | List all indexed projects in `~/.fog/registry.json` | Core |
 | `fog_gaps` | Find orphans, cycles, dead code | Advanced |
 | `fog_domains` | Query business domains and their symbols | Advanced |
 | `fog_assign` | Define/update a business domain | Advanced |
-| `fog_constraints` | Ingest ADR files AND push inline architecture constraints (Layer 3) | Advanced |
+| `fog_constraints` | Ingest ADR files + push inline architecture constraints | Advanced |
 | `fog_decisions` | Record WHY code was changed (builds causality log) | Advanced |
 | `fog_import` | Migrate from ByteRover / GitNexus to fog-context | Advanced |
 
-### Tool argument reference (avoid hallucination)
+### Tool Argument Reference
 
 | Tool | Required args | Example |
 |:---|:---|:---|
@@ -368,27 +347,14 @@ cargo build --release --package fog-mcp-server --features all-langs
 
 ---
 
-## Agent Workflow (Mandatory 4-Step Protocol)
+## 📚 Reference
 
-Every AI agent session **must** follow this order:
-
-```
-1. fog_brief({})           → Verify index is fresh (symbols > 0)
-                             If symbols = 0 → call fog_scan first
-2. fog_lookup/domains      → Orient to the codebase
-3. fog_impact({ target })  → Check blast radius BEFORE any edit
-                             If risk = HIGH/CRITICAL → STOP and warn user
-4. fog_decisions({...})    → Record WHY after every significant change
-```
-
----
-
-## Language Support
+### Language Support
 
 | Language | Extensions | Notes |
 |:---|:---|:---|
 | Rust | `.rs` | Native |
-| TypeScript / JavaScript | `.ts`, `.tsx`, `.js`, `.jsx` | Native (TSX grammar separate) |
+| TypeScript / JavaScript | `.ts`, `.tsx`, `.js`, `.jsx` | Native |
 | Python | `.py` | Native |
 | Go | `.go` | Native |
 | C / C++ | `.c`, `.cpp`, `.cc`, `.h` | Native |
@@ -400,9 +366,7 @@ Every AI agent session **must** follow this order:
 | **Swift** | `.swift` | `--features swift` (C-FFI) |
 | **Dart** | `.dart` | `--features dart` (C-FFI) |
 
----
-
-## 5-Layer Memory Architecture
+### 5-Layer Memory Architecture
 
 ```
 Layer 1: PHYSICAL     ← Auto-indexed (AST symbols, call edges, imports)
@@ -411,6 +375,24 @@ Layer 3: CONSTRAINT   ← fog_constraints (from ADR files)
 Layer 4: CAUSALITY    ← fog_decisions (WHY code changed)
 Layer 5: HARNESS      ← fog_brief (session state + staleness detection)
 ```
+
+### Build from Source
+
+```bash
+# Minimum Rust version: 1.75+
+git clone https://github.com/luciusvo/fog-context.git
+cd fog-context
+cargo build --release --package fog-mcp-server
+
+# Binary will be at: target/release/fog-mcp-server
+cp target/release/fog-mcp-server ~/.fog/bin/fog-mcp-server
+
+# With mobile language support (Kotlin/Swift/Dart - requires native C toolchain)
+cargo build --release --package fog-mcp-server --features all-langs
+```
+
+> **macOS Intel users:** No pre-built binary is provided. Build locally (~2 min with Rust installed).
+> Alternatively, the ARM64 binary (`fog-mcp-macos-arm64`) runs transparently on Intel via Rosetta 2 (macOS 11+).
 
 ---
 
@@ -422,4 +404,4 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
 
 ## License
 
-MIT - See [LICENSE](LICENSE)
+MIT — See [LICENSE](LICENSE)
