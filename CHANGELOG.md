@@ -7,6 +7,25 @@ Format: [Semantic Versioning](https://semver.org). Entries grouped by type:
 
 ---
 
+## [0.6.3] - 2026-04-20
+
+### Fixed
+
+- **fog_brief chicken-and-egg routing** — `fog_brief` now immediately registers the project
+  in `~/.fog/registry.json` when creating a new `fog_id`. Previously, the `fog_id` returned
+  by `fog_brief` could not be used in a subsequent `fog_scan` call because the project wasn't
+  in the registry yet, causing `ESCALATE_MISSING_CONTEXT`.
+- **Large repo advisory in fog_brief** — When a project is not yet indexed, `fog_brief` now
+  performs a quick file count (excludes `.git/`, `node_modules/`, `target/`, etc.) and shows:
+  - > 1 000 files: `⚠️ Large project (~N files) — use CLI for initial indexing`
+  - ≤ 1 000 files: `📁 ~N files detected — run fog_scan({ "project": "fog_id" })`
+  Agents can now make the CLI vs MCP decision **before** submitting `fog_scan`.
+- **README `FOG_PROJECT` removal** — Scenario B ("`FOG_PROJECT` env var") was still present
+  in README despite being removed in v0.6.2, causing agents to configure an unsupported option.
+  Replaced with correct multi-project vs single-project setup documentation.
+
+---
+
 ## [0.6.2] - 2026-04-20
 
 Consolidates v0.6.1 + v0.6.2 changes: Hybrid Hint System, multi-tenant hardening,
