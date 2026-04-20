@@ -69,6 +69,21 @@ pub fn handle(
             // Use ensure_project_id (not read_project_id) so fog_id is always set
             let fog_id = crate::registry::ensure_project_id(&project_root.to_string_lossy());
 
+            // Fix 1: Eagerly register the project path in the global registry.
+            // fog_brief may be the first call on a new project — if we don't register here,
+            // the fog_id returned in this response cannot be used to call fog_scan.
+            // Chicken-and-egg fix: register with 0 symbols (fog_scan will update the count later).
+            {
+                let mut reg = crate::registry::Registry::load();
+                let path_str = project_root.to_string_lossy().into_owned();
+                if reg.find(&fog_id).is_none() && reg.find(&path_str).is_none() {
+                    let reg_name = project_root.file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| "unknown".into());
+                    reg.register(reg_name, path_str);
+                }
+            }
+
             let project_name = ProjectConfig::load(project_root)
                 .name
                 .or_else(|| {
@@ -76,6 +91,48 @@ pub fn handle(
                         .map(|n| n.to_string_lossy().into_owned())
                 })
                 .unwrap_or_else(|| "unknown".to_string());
+
+            // Fix 2: When project is not yet indexed, quickly count files so the
+            // agent can decide CLI vs MCP BEFORE submitting fog_scan.
+            let unindexed_advisory = if score.total_symbols == 0 {
+                let file_count = walkdir::WalkDir::new(project_root)
+                    .follow_links(false)
+                    .max_depth(15)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.file_type().is_file())
+                    .filter(|e| {
+                        // Skip .fog-context/ and common non-source dirs
+                        !e.path().components().any(|c| {
+                            let s = c.as_os_str().to_str().unwrap_or("");
+                            matches!(s, ".fog-context" | ".git" | "node_modules" | "target" | "dist" | "build" | ".gradle")
+                        })
+                    })
+                    .count();
+
+                if file_count > 1000 {
+                    format!(
+                        "\n\n> ⚠️ **Large project (~{file_count} source files detected)**\n\
+                         > Use CLI for initial indexing — shows progress, no MCP timeout risk:\n\
+                         > ```bash\n\
+                         > fog-mcp-server index --project {}\n\
+                         > ```\n\
+                         > After CLI index completes, use `fog_brief` + MCP tools normally.",
+                        project_root.display()
+                    )
+                } else if file_count > 0 {
+                    format!(
+                        "\n\n> 📁 **~{file_count} source files detected.** Index with:\n\
+                         > ```\n\
+                         > fog_scan({{ \"project\": \"{fog_id}\" }})\n\
+                         > ```"
+                    )
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
 
             // DB file size
             let db_size = {
@@ -158,7 +215,7 @@ pub fn handle(
                 }
             }
 
-            ToolCallResult::ok(lines.join("\n"))
+            ToolCallResult::ok(format!("{}{unindexed_advisory}", lines.join("\n")))
         }
         Err(e) => ToolCallResult::err(format!("fog_brief error: {e}")),
     }

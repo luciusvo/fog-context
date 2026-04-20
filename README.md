@@ -41,25 +41,15 @@ After install, your fog home directory looks like:
 
 ### Step 2: Configure your AI editor (one-time, works for ALL repos)
 
-fog-context resolves the active project using this **priority chain** (highest first):
-
-| Priority | Method | When to use |
-|:---------|:-------|:------------|
-| P1 | `--project /path` arg | Force a specific repo (single-project setup) |
-| P2 | `.fog-context/` found in CWD | Auto-detect if IDE sets CWD = workspace ✅ |
-| P3 | Walk up ancestors for `.fog-context/` | Handles subdirectory launches |
-| P4 | `FOG_PROJECT` env var | Headless agents, CI, when CWD is unreliable |
-| P5 | CWD fallback | Last resort — logs a warning |
-
-Choose the scenario that matches your setup:
+fog-context v0.6.2 uses **explicit per-call routing via `fog_id`**. There is no global env var.
+Choose the setup that matches your workflow:
 
 ---
 
-#### Scenario A - IDE sets CWD = workspace (Cursor, Windsurf, most IDEs)
+#### Scenario A — Multi-project mode (recommended for Antigravity, headless agents)
 
-**No args needed** — fog-context auto-detects the project from CWD.
+No args at startup. **Each tool call passes `"project": "<fog_id>"`** to route to the right DB.
 
-**Cursor** (`.cursor/mcp.json`):
 ```json
 {
   "mcpServers": {
@@ -70,46 +60,28 @@ Choose the scenario that matches your setup:
 }
 ```
 
-**Cline / Claude Desktop** (`cline_mcp_settings.json`):
-```json
-{
-  "mcpServers": {
-    "fog-context": {
-      "command": "/home/your-username/.fog/bin/fog-mcp-server"
-    }
-  }
-}
+Agent workflow:
 ```
+# 1. Get fog_id for this project (one-time per project)
+fog_brief({ "project": "/absolute/path/to/repo" })
+→ response shows: fog_id: `fog_019506...`  ← save this
 
----
-
-#### Scenario B - Headless agents or unreliable CWD (Antigravity, CI bots)
-
-Use `FOG_PROJECT` env var — safer than CWD, more flexible than hardcoded `--project`:
-
-```json
-{
-  "mcpServers": {
-    "fog-context": {
-      "command": "/home/your-username/.fog/bin/fog-mcp-server",
-      "env": {
-        "FOG_PROJECT": "/home/your-username/myproject"
-      }
-    }
-  }
-}
+# 2. Use fog_id in all subsequent calls
+fog_brief({ "project": "fog_019506..." })
+fog_lookup({ "query": "auth", "project": "fog_019506..." })
 ```
 
 > [!TIP]
-> Some IDEs support `${workspaceFolder}` in env values:
-> `"FOG_PROJECT": "${workspaceFolder}"` — this is more reliable than CWD for Cline + headless setups.
+> The fastest way to get fog_id: `cat /path/to/repo/.fog-context/config.toml`
+> fog_brief registers the project automatically on first call.
 
 ---
 
-#### Scenario C - Force a specific project (single-project users or Zed)
+#### Scenario B — Single-project mode (Cursor, Zed, dedicated setups)
 
-Use `--project` when you always work on one repo, or when your IDE doesn't set CWD:
+Use `--project` when you always work on one repo:
 
+**Cursor** (`.cursor/mcp.json`), **Cline** (`cline_mcp_settings.json`), **Claude Desktop**:
 ```json
 {
   "mcpServers": {
@@ -120,6 +92,8 @@ Use `--project` when you always work on one repo, or when your IDE doesn't set C
   }
 }
 ```
+
+In single-project mode, omitting `"project"` in tool calls is OK — server uses the configured default.
 
 **Zed** (`~/.config/zed/settings.json`):
 ```json
@@ -136,35 +110,45 @@ Use `--project` when you always work on one repo, or when your IDE doesn't set C
 ```
 
 > [!IMPORTANT]
-> Call `fog_brief({})` at the start of every session to verify which project fog-context is serving.
-> The output shows **Name**, **Path**, and **fog_id** so you can confirm immediately.
+> `FOG_PROJECT` env var was **removed in v0.6.2** — it caused multi-agent routing contamination.
+> Use `"args": ["--project", "/path"]` instead.
+
+> [!TIP]
+> Call `fog_brief({})` at session start to verify which project fog-context is serving.
+> Output shows **fog_id**, **Name**, **Path**, and whether a **new binary** needs re-indexing.
 
 ---
 
 
 ## Adding a New Repo (What AI Agents Should Do)
 
-When you open a new project in your IDE, fog-context is already running (binary is already configured). The AI agent needs to initialize the index for this specific repo.
+When you open a new project in your IDE, fog-context is already running. The AI agent needs to initialize the index.
 
-### For AI Agents: Protocol when starting on a new repo
+### Agent protocol: starting on a new repo
 
 ```
-1. Call fog_brief({})
-   → If symbols = 0 or "DB not found": this is a fresh repo, run fog_scan
+# Step 0: Get fog_id (always first)
+fog_brief({ "project": "/absolute/path/to/repo" })
+→ Response shows: fog_id + estimated file count
+→ IMPORTANT: if "Large project (~N files detected)" warning shown → use CLI (Step 1b)
 
-2. Call fog_scan({})
-   → fog-context auto-creates .fog-context/context.db in the project root
-   → Auto-registers the project in ~/.fog/registry.json
-   → Auto-generates .fog-context/AGENTS.md with tool instructions
-   → Returns: file count, symbol count, any parser warnings
+# Step 1a: For small/medium repos (< 1000 files) — index via MCP:
+fog_scan({ "project": "<fog_id from fog_brief>" })
 
-3. Verify with fog_roots({})
-   → Should now show this project in the list
+# Step 1b: For large repos (> 1000 files) — index via CLI (shows progress):
+# Run in terminal:
+fog-mcp-server index --project /absolute/path/to/repo
+# Then verify:
+fog_brief({ "project": "<fog_id>" })
 
-4. Build knowledge layers (mandatory for full intelligence):
-   → fog_assign({ domain: "Authentication", symbols: ["login", "auth_check"] })
-   → fog_constraints({ path: "." })    ← scans for ADR files
-   → fog_decisions({ functions: ["key_fn"], reason: "why it works this way" })
+# Step 2: Verify
+fog_roots({})
+→ Should show this project in the list
+
+# Step 3: Build knowledge layers (mandatory for full intelligence):
+fog_assign({ "domain": "Authentication", "symbols": ["login", "auth_check"] })
+fog_constraints({ "path": "." })    ← scans for ADR files
+fog_decisions({ "functions": ["key_fn"], "reason": "why it works this way" })
 ```
 
 ### For humans: Quick start on a new repo
