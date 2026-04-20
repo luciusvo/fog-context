@@ -10,7 +10,7 @@ fog-context is a **dual-mode binary** that serves as the memory backbone for AI 
 
 fog-context uses a **single universal binary** at `~/.fog/bin/fog-mcp-server` shared across all your repos. You only install once - every project just points to the same binary.
 
-### Step 1: Download the binary
+### Step 1: Download and verify the binary
 
 ```bash
 # Create the fog home directory
@@ -30,14 +30,29 @@ curl -L https://github.com/luciusvo/fog-context/releases/latest/download/fog-mcp
   -o ~/.fog/bin/fog-mcp-server && chmod +x ~/.fog/bin/fog-mcp-server
 ```
 
+**Verify the binary works** (mandatory before proceeding):
+```bash
+ls -la ~/.fog/bin/fog-mcp-server
+# Expected: -rwxr-xr-x ... fog-mcp-server
+# If permission denied: chmod +x ~/.fog/bin/fog-mcp-server
+
+~/.fog/bin/fog-mcp-server stats --project /tmp 2>&1 | head -3
+# Expected: "fog-context v0.6.x - Stats for: /tmp" (or DB error — both confirm binary works)
+# If "command not found": the download failed, retry the curl command above
+```
+
 After install, your fog home directory looks like:
 
 ```
 ~/.fog/
 ├── bin/
 │   └── fog-mcp-server     ← Universal binary (shared by all repos)
-└── registry.json          ← Auto-created. Tracks all indexed repos.
+└── registry.json          ← Auto-created on first fog_brief or CLI index.
 ```
+
+> [!NOTE]
+> `registry.json` is created automatically the FIRST time you run either `fog_brief` (via MCP)
+> or `fog-mcp-server index --project /path` (via CLI). It is NOT created at install time.
 
 ### Step 2: Configure your AI editor (one-time, works for ALL repos)
 

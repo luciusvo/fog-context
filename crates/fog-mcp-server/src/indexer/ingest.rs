@@ -83,7 +83,12 @@ pub fn run_two_pass(
     // Open a direct connection to the same DB file
     let db_path = db.db_path().to_path_buf();
     let conn = Connection::open(&db_path)?;
-    conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;")?;
+    // CRITICAL: set busy_timeout FIRST on this new connection.
+    // PRAGMA journal_mode = WAL needs an exclusive lock to switch modes.
+    // Without busy_timeout set first, that switch fails immediately with
+    // "database is locked" if the MCP server's connection is open.
+    conn.execute_batch("PRAGMA busy_timeout = 30000;")?; // 30s retry window
+    conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL;")?;
 
     run_two_pass_conn(project_root, &conn, scanned, full)
 }

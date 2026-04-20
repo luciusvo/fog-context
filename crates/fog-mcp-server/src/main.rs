@@ -445,12 +445,39 @@ async fn main() {
             let db = create_or_open_db(&project_root).unwrap_or_else(|e| {
                 eprintln!("[fog] DB error: {e}"); std::process::exit(1);
             });
-            // Fix 2: eager fog_id — generate it now, before index runs
+            // Eager fog_id — generate before index runs so it's in config.toml
             let fog_id = crate::registry::ensure_project_id(&project_root.to_string_lossy());
             eprintln!("[fog] fog_id: {fog_id}");
+
+            // Register in global registry NOW (0 symbols) so fog_id is routable
+            // via MCP even if the upcoming index fails or takes a long time.
+            // run_scan() will upsert again with actual symbol count on success.
+            {
+                let project_name = project_root.file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "unknown".into());
+                let mut reg = crate::registry::Registry::load();
+                if reg.find(&fog_id).is_none() {
+                    reg.register(project_name, project_root.to_string_lossy().into_owned());
+                    eprintln!("[fog] Registered in ~/.fog/registry.json");
+                }
+            }
+
             let result = crate::indexer::run_scan(&project_root, &db, full);
             if result.is_error {
-                eprintln!("[fog] Index failed.");
+                // Print actual error so agents/users can diagnose
+                let err_text = result.content.first()
+                    .map(|c| c.text.as_str())
+                    .unwrap_or("unknown error");
+                if err_text.contains("database is locked") {
+                    eprintln!("[fog] ⏳ Database is locked — another process may be indexing this project.");
+                    eprintln!("[fog] Check: ps aux | grep fog-mcp-server | grep index");
+                    eprintln!("[fog] If another index is running, wait for it to complete then verify:");
+                    eprintln!("[fog]   ~/.fog/bin/fog-mcp-server stats --project {}", project_root.display());
+                    eprintln!("[fog] If no other process is running, retry the index command.");
+                } else {
+                    eprintln!("[fog] Index failed: {err_text}");
+                }
                 std::process::exit(1);
             }
             let text = result.content.first().map(|c| c.text.as_str()).unwrap_or("Done");

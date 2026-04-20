@@ -7,6 +7,29 @@ Format: [Semantic Versioning](https://semver.org). Entries grouped by type:
 
 ---
 
+## [0.6.4] - 2026-04-20
+
+### Fixed
+
+- **CLI registry early registration** — `fog-mcp-server index` now registers the project in
+  `~/.fog/registry.json` BEFORE calling `run_scan()`. Previously, if indexing failed or took
+  a very long time, `registry.json` was never created, leaving agents unable to route calls.
+- **SQLite PRAGMA ordering: busy_timeout before journal_mode** — `PRAGMA journal_mode = WAL`
+  requires an exclusive lock to switch journal modes. On a busy connection, this lock must
+  wait — but `busy_timeout` wasn't set yet at that point (it was in the same `execute_batch`
+  as `journal_mode`). Now `PRAGMA busy_timeout = 30000` is sent as a SEPARATE first call,
+  so the 30-second retry window applies to the WAL switch itself.
+- **"database is locked" now shows diagnostic guidance** — When CLI index fails with
+  `database is locked`, it now prints: which command to run to check for a concurrent indexer,
+  and how to verify once it completes. Prevents agents from re-triggering index on an already-
+  running process.
+- **README binary verification step** — Step 1 now includes explicit `ls -la` + `stats`
+  verification commands so agents can confirm the binary is executable before proceeding.
+- **README `registry.json` timing clarification** — Noted that `registry.json` is created on
+  first MCP `fog_brief` call or CLI `fog-mcp-server index`, NOT at install time.
+
+---
+
 ## [0.6.3] - 2026-04-20
 
 ### Fixed

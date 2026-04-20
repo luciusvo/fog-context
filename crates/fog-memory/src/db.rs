@@ -180,13 +180,15 @@ pub fn open_shared_db(project_root: &Path) -> MemoryResult<MemoryDb> {
     let conn = Connection::open(&db_path)
         .map_err(MemoryError::Database)?;
 
-    // Configure connection for best performance + memory efficiency
-    // cache_size=-2000 → 2MB page cache (default is 8MB) — 4× reduction in multi-project setups
-    // mmap_size=0      → disable memory-mapped I/O — avoids holding large VA ranges per connection
+    // CRITICAL: set busy_timeout FIRST before journal_mode = WAL.
+    // WAL mode switch needs an exclusive lock; without timeout set first,
+    // it fails immediately if another connection is already open.
+    // 30s gives CLI indexer time to wait for MCP server reads to complete.
+    conn.execute_batch("PRAGMA busy_timeout = 30000;")
+        .map_err(MemoryError::Database)?;
     conn.execute_batch(
         "PRAGMA journal_mode = WAL;
          PRAGMA foreign_keys = ON;
-         PRAGMA busy_timeout = 5000;
          PRAGMA synchronous = NORMAL;
          PRAGMA cache_size = -2000;
          PRAGMA mmap_size = 0;",
