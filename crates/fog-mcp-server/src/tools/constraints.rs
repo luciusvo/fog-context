@@ -123,7 +123,7 @@ pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> To
              statement: \"Handlers must not call DB directly\"\n\
              ---\n\
              ```\n\
-             Or create a `.fog.yml` at root with `adr_paths: [custom/path]`",
+             Or define custom paths in `.fog-context/config.toml` under `[adr] paths = [\"...\"]`",
             paths_tried.join("\n")
         ));
     }

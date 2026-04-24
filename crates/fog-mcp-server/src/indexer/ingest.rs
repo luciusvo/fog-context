@@ -520,46 +520,42 @@ fn is_test_path(path: &str) -> bool {
 
 pub fn write_agents_md(root: &Path, files: usize, symbols: usize, elapsed_ms: u128) {
     let agents_path = root.join("AGENTS.md");
-    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
     let existing = std::fs::read_to_string(&agents_path).unwrap_or_default();
     let marker = "<!-- fog-context -->";
-    let prefix = if let Some(idx) = existing.find(marker) {
-        existing[..idx].to_string()
-    } else if !existing.is_empty() {
+    
+    // If the block already exists, we keep it completely static and skip writing.
+    // This prevents unnecessary disk I/O and git noise on every scan.
+    if existing.contains(marker) {
+        return;
+    }
+
+    let prefix = if !existing.is_empty() {
         format!("{existing}\n\n")
     } else {
         String::new()
     };
 
-    // Sprint 3D: add onboarding block when this appears to be a first-time index
-    // (AGENTS.md didn't exist or had no fog-context section yet)
-    let is_first_run = !existing.contains(marker);
-    let onboarding = if is_first_run {
+    // First-run onboarding block:
+    // Uses universal API (no FoG-specific rules) so it works in any project.
+    let onboarding = if symbols > 0 {
         format!(
             "\n\
-            ### 🔴 First-time Setup - MANDATORY Knowledge Layer Bootstrap\n\
-            > fog-context auto-indexed Layer 1 (Physical: {symbols} symbols). \
-            Semantic Layers 2-4 are currently empty.\n\
+            ### 🔴 First-time Setup — MANDATORY Knowledge Layer Bootstrap\n\
+            > fog-context indexed Layer 1 (Physical: {symbols} symbols). \
+            Semantic Layers 2-4 are empty — Knowledge Score: 0/100.\n\
             > Complete these steps **once** to unlock full intelligence:\n\
             \n\
             ```\n\
-            Step 1 - Layer 2 (Business Domains): Map Semantic Synonyms to Exact Code\n\
-            fog_assign({{ domain: \"Notification\", keywords: [\"mail\", \"sms\"], symbols: [\"NotificationDispatcher\"] }})\n\
-            fog_assign({{ domain: \"DataAccess\",   keywords: [\"sql\", \"db\"],   symbols: [\"db_query\"] }})\n\
+            Step 1 - Layer 2 (Business Domains): Map semantic synonyms to exact code\n\
+            fog_assign({{ \"project\": \"<fog_id>\", \"domain\": \"Notification\", \"symbols\": [\"NotificationDispatcher\"] }})\n\
+            fog_assign({{ \"project\": \"<fog_id>\", \"domain\": \"DataAccess\",   \"symbols\": [\"db_query\"] }})\n\
             \n\
             Step 2 - Layer 3 (Constraints): Ingest architecture rules from ADR files\n\
-            fog_constraints({{}})          ← scans logs/decisions/, docs/adr/, docs/decisions/\n\
+            fog_constraints({{ \"project\": \"<fog_id>\" }})   ← scans logs/decisions/, docs/adr/\n\
             \n\
             Step 3 - Layer 4 (Decisions): Record WHY key design decisions were made\n\
-            fog_decisions({{ functions: [\"key_fn\"], reason: \"...\", revert_risk: \"LOW\" }})\n\
-            ```\n\
-            \n\
-            ### 🔴 MANDATORY: After Every Significant Change\n\
-            ```\n\
-            fog_decisions({{ functions: [\"changed_fn\"], reason: \"WHY it changed\", revert_risk: \"LOW|MEDIUM|HIGH\" }})\n\
-            ```\n\
-            > Completing a task without recording WHY = **KNOWLEDGE GAP VIOLATION**.\n\
-            > Context Maturity visualization will update as you populate Layers 2-4.\n",
+            fog_decisions({{ \"project\": \"<fog_id>\", \"functions\": [\"key_fn\"], \"reason\": \"...\", \"revert_risk\": \"LOW\" }})\n\
+            ```\n",
         )
     } else {
         String::new()
@@ -568,18 +564,12 @@ pub fn write_agents_md(root: &Path, files: usize, symbols: usize, elapsed_ms: u1
     let section = format!(
         "<!-- fog-context -->\n\
          ## fog-context MCP - Agent Instructions\n\
-         > Auto-generated {now} | {files} files · {symbols} symbols · indexed in {elapsed_ms}ms\n\
          \n\
          ### MANDATORY: Start every session\n\
          \n\
-         **Step 0 — Get fog_id (before any other call):**\n\
-         ```bash\n\
-         # Fastest: read from file\n\
-         cat .fog-context/config.toml   # fog_id = \"fog_...\"\n\
-         \n\
-         # Or via MCP:\n\
-         fog_brief({{ \"project\": \"/absolute/path\" }})   # → fog_id shown at top\n\
-         ```\n\
+         **Step 0 — Get fog_id (Discover Registry):**\n\
+         Call `fog_roots({{}})` to list all registered projects and grab the target's `fog_id`.\n\
+         If your project is NOT listed, run `fog_scan({{ \"project\": \"/absolute/path/to/project\" }})` to register it first.\n\
          \n\
          **Step 1 — Verify project + load domain map:**\n\
          ```\n\
@@ -587,31 +577,44 @@ pub fn write_agents_md(root: &Path, files: usize, symbols: usize, elapsed_ms: u1
          fog_domains({{ \"project\": \"<fog_id>\" }}) → load business domain map\n\
          ```\n\
          \n\
+         ### MANDATORY: After Every Significant Change\n\
+         ```\n\
+         fog_decisions({{ \"project\": \"<fog_id>\", \"functions\": [\"changed_fn\"], \"reason\": \"WHY it changed\", \"revert_risk\": \"LOW|MEDIUM|HIGH\" }})\n\
+         ```\n\
+         > Completing a task without recording WHY = **KNOWLEDGE GAP VIOLATION**.\n\
+         \n\
          ### Tool Order\n\
          1. **Orient:** fog_domains → fog_lookup\n\
          2. **Understand:** fog_inspect → fog_trace\n\
          3. **Before edit:** fog_impact (HIGH/CRITICAL → warn user first)\n\
-         4. **After edit:** fog_decisions {{ functions, reason, revert_risk }} (**MANDATORY**)\n\
+         4. **After edit:** fog_decisions (record WHY — see MANDATORY above)\n\
          \n\
          ### Version Check\n\
-         `fog_brief` shows: `Indexed by: v0.6.x`\n\
-         If binary version ≠ indexed version → 🆕 banner appears → run fog_scan to refresh.\n\
+         When calling `fog_brief`, check the `indexer_version`. If it differs from the server's version, immediately run `fog_scan({{ \"project\": \"<fog_id>\" }})` to refresh the AST database to the new schema.\n\
          \n\
-         ### 🪄 Advanced: Handling Framework Magic (IoC, Event Bus, Metaprogramming)\n\
+         ### Advanced: Handling Framework Magic (IoC, Event Bus, Metaprogramming)\n\
          If `fog_trace` breaks because of Dependency Injection (Interfaces), Event Buses, or dynamic metaprogramming (like Rails `has_many`), AST cannot see the link. You MUST bridge it via hints:\n\
          1. Create `.fog-context/hints/<lang>.json` (e.g. `csharp.json`, `ruby.json`)\n\
          2. Use `extra_calls` to bridge EventBus/IoC: `[ {{ \"from\": \"IUserRepository.Add\", \"to\": \"UserRepository.Add\" }} ]`\n\
          3. Use `di_annotations` to tag IoC: `[ \"@Inject\", \"@MyService\" ]`\n\
          4. Use `macro_expansions` to bridge metaprogramming aliases.\n\
-         5. Run `fog_scan(full=false)` immediately to apply the hints to the Graph!\n\
+         5. Run `fog_scan({{ \"project\": \"<fog_id>\", \"full\": false }})` immediately to apply the hints to the Graph!\n\
          \n\
-         ### Large Repos (>1000 files)\n\
-         Prefer CLI for initial index (shows progress, no MCP timeout):\n\
-         ```bash\n\
-         fog-mcp-server index --project /path/to/project\n\
-         ```\n\
-         Then use MCP tools for all queries.{onboarding}\n\
-         <!-- /fog-context -->"
+         ### The \"Typist\" Trap (No Single Source of Truth)\n\
+         Never trust any single source 100% — not the AST graph (which misses framework magic), and not a User Spec (which may lack real-time blast radius context).\n\
+         MANDATORY: If the user provides a complete Hand-off Document, you must still cross-reference it. Always verify the module state via `fog_inspect` or actual file content before editing. Bypassing cross-validation because the \"prompt seemed explicit enough\" is a severe context breach.\n\
+         \n\
+         ### Red Flags - Things to NEVER DO\n\
+         \n\
+         | Forbidden | Correct |\n\
+         |:-----------|:----------|\n\
+         | Trust any single source 100% (Spec or AST) without cross-validation | Always cross-reference the User Hand-off Spec against the actual codebase reality (e.g., via `fog_impact`) before editing. |\n\
+         | Read source files with file tools before checking `context` | Call `fog_inspect` / `fog_lookup` first |\n\
+         | Rename without checking impact | Always check call sites and definitions first |\n\
+         | Edit high-impact code without `fog_impact` check | Always check blast radius |\n\
+         | Make architectural decisions without logging | Log every significant decision |\n\
+         | Ignore `risk: CRITICAL` warnings | Surface them to the user |\n\
+         {onboarding}<!-- /fog-context -->"
     );
     let _ = std::fs::write(&agents_path, format!("{prefix}{section}"));
 }
