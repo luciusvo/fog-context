@@ -48,40 +48,77 @@ pub fn run_scan(
 ) -> ToolCallResult {
     let start = std::time::Instant::now();
 
-    // E7: Progress feedback to stderr (visible in CLI, silent to MCP JSON-RPC stdout)
-    eprintln!("[fog] 1/5 🔍 Walking files: {}", project_root.display());
-
-    // Step 1: Walk files (gitignore-aware)
-    let scanned = walker::walk_project(project_root);
-    if scanned.is_empty() {
-        return ToolCallResult::ok("⚠️  No source files found. Is the project path correct?");
-    }
-    eprintln!("[fog] 2/5 🌲 Found {} files. Starting parsing (Pass 1, full={})...", scanned.len(), full);
-
-    // Step 2: Run two-pass indexer
-    let stats = match ingest::run_two_pass(project_root, db, &scanned, full) {
-        Ok(s) => s,
-        Err(e) => return ToolCallResult::err(format!("fog_scan error: {e}")),
+    let scanned = match phase_walk(project_root) {
+        Ok(files) => files,
+        Err(e) => return ToolCallResult::ok(e),
     };
-    eprintln!("[fog] ✓ Pass 1 done: {} symbols, {} intra-file edges", stats.symbols_created, stats.edges_intra);
-    eprintln!("[fog] ✓ Pass 2 done: {} cross-file edges", stats.edges_cross);
+
+    if scanned.len() > 1000 && db.total_symbols() == 0 {
+        let fog_id = crate::registry::ensure_project_id(&project_root.to_string_lossy());
+        return ToolCallResult::ok(format!(
+            "⚠️ **Large codebase detected ({count} files)**\n\n\
+             MCP scan may timeout. Use CLI for initial indexing:\n\
+             ```bash\n\
+             ~/.fog/bin/fog-mcp-server index --project {path}\n\
+             ```\n\n\
+             After CLI completes, verify with:\n\
+             ```\n\
+             fog_brief({{ \"project\": \"{fog_id}\" }})\n\
+             ```",
+            count = scanned.len(),
+            path = project_root.display(),
+            fog_id = fog_id,
+        ));
+    }
+
+    let stats = match phase_parse(project_root, db, &scanned, full) {
+        Ok(s) => s,
+        Err(e) => return ToolCallResult::err(e),
+    };
 
     let elapsed = start.elapsed().as_millis();
 
-    // Step 3: Write AGENTS.md workflow guide
-    ingest::write_agents_md(project_root, scanned.len(), stats.symbols_created, elapsed);
+    let fog_id = phase_register(project_root, db, scanned.len(), stats.symbols_created, elapsed);
 
-    // Step 4: Register project in global ~/.fog/registry.json
-    // Fix 2b: ensure fog_id is generated NOW (eager, before registry upsert)
-    // so it's available in the response even if registry call fails.
+    phase_format_result(project_root, db, &stats, &fog_id, scanned.len(), elapsed)
+}
+
+fn phase_walk(project_root: &Path) -> Result<Vec<walker::ScannedFile>, String> {
+    eprintln!("[fog] 1/5 🔍 Walking files: {}", project_root.display());
+    let scanned = walker::walk_project(project_root);
+    if scanned.is_empty() {
+        return Err("⚠️  No source files found. Is the project path correct?".to_string());
+    }
+    Ok(scanned)
+}
+
+fn phase_parse(
+    project_root: &Path,
+    db: &fog_memory::MemoryDb,
+    files: &[walker::ScannedFile],
+    full: bool,
+) -> Result<IndexStats, String> {
+    eprintln!("[fog] 2/5 🌲 Found {} files. Starting parsing (Pass 1, full={})...", files.len(), full);
+    let stats = ingest::run_two_pass(project_root, db, files, full).map_err(|e| format!("fog_scan error: {e}"))?;
+    eprintln!("[fog] ✓ Pass 1 done: {} symbols, {} intra-file edges", stats.symbols_created, stats.edges_intra);
+    eprintln!("[fog] ✓ Pass 2 done: {} cross-file edges", stats.edges_cross);
+    Ok(stats)
+}
+
+fn phase_register(
+    project_root: &Path,
+    db: &fog_memory::MemoryDb,
+    file_count: usize,
+    symbol_count: usize,
+    elapsed_ms: u128,
+) -> String {
+    ingest::write_agents_md(project_root, file_count, symbol_count, elapsed_ms);
     let fog_id = crate::registry::ensure_project_id(&project_root.to_string_lossy());
-    // C1: Record the binary version that indexed this project → fog_brief can detect stale index
     {
         let mut cfg = crate::registry::ProjectConfig::load(project_root);
         cfg.indexer_version = Some(env!("CARGO_PKG_VERSION").to_string());
         cfg.save(project_root);
     }
-    // E2 fix: Query TOTAL symbols from DB (not delta) so re-scans don't show symbol_count=0
     {
         let name = project_root
             .file_name()
@@ -93,27 +130,20 @@ pub fn run_scan(
         reg.upsert(name, path, total_symbols);
         eprintln!("[fog] Registry updated: {} total symbols", total_symbols);
     }
+    fog_id
+}
 
-    // A3: Large repo advisory — scanned.len() > 1000 files
-    let large_repo_warning = if scanned.len() > 1000 {
-        format!(
-            "\n\n> ⚠️ **Large repo ({} files detected)**\n\
-             > For faster future updates, prefer CLI indexing:\n\
-             > ```bash\n\
-             > fog-mcp-server index --project {}\n\
-             > ```\n\
-             > This runs with visible progress and avoids MCP timeouts.",
-            scanned.len(),
-            project_root.display()
-        )
-    } else {
-        String::new()
-    };
+fn phase_format_result(
+    project_root: &Path,
+    db: &fog_memory::MemoryDb,
+    stats: &IndexStats,
+    fog_id: &str,
+    file_count: usize,
+    elapsed_ms: u128,
+) -> ToolCallResult {
+    let total_symbols = db.total_symbols();
 
-    // #12b: Up-to-date detection — if nothing changed AND no errors, say so clearly
-    // "0 indexed" is ambiguous: it could mean OK or catastrophic failure.
     if stats.files_indexed == 0 && stats.files_deleted == 0 && stats.query_errors.is_empty() {
-        let total_symbols = db.total_symbols();
         return ToolCallResult::ok(format!(
             "✅ **Up-to-date** — No changes detected.\n\
              - **Project:** {}\n\
@@ -123,15 +153,28 @@ pub fn run_scan(
              The knowledge graph is current. No re-indexing needed.\n\
              Use fog_lookup, fog_inspect, fog_impact to explore.",
             project_root.display(),
-            total = scanned.len(),
+            total = file_count,
         ));
     }
 
-    // Warn about any query compile errors so agents see them immediately
+    let large_repo_warning = if file_count > 1000 {
+        format!(
+            "\n\n> ⚠️ **Large repo ({} files detected)**\n\
+             > For faster future updates, prefer CLI indexing:\n\
+             > ```bash\n\
+             > fog-mcp-server index --project {}\n\
+             > ```\n\
+             > This runs with visible progress and avoids MCP timeouts.",
+            file_count,
+            project_root.display()
+        )
+    } else {
+        String::new()
+    };
+
     let warnings = if stats.query_errors.is_empty() {
         String::new()
     } else {
-        let total_symbols = db.total_symbols();
         if total_symbols == 0 {
             format!(
                 "\n\n> [!CRITICAL]\n> 🔴 **No symbols extracted.** All parsers failed. The knowledge graph is empty:\n{}",
@@ -144,6 +187,23 @@ pub fn run_scan(
             )
         }
     };
+
+    let mut bootstrap_hint = String::new();
+    if let Ok(score) = db.knowledge_score() {
+        if score.layer_score == 0 {
+            bootstrap_hint = r#"
+## 🟡 Knowledge Layers 2-4 are empty (Score: 0/100)
+
+To unlock full codebase intelligence, tell your AI:
+> "Populate fog-context knowledge layers for this codebase.
+>  Read in multiple passes. Stop when a pass adds fewer than 3 new items,
+>  or after 5 passes."
+
+💡 This is read-heavy work. Use a **mid-tier model** (Gemini Flash, Claude Haiku)
+   to save cost. A typical 1000-symbol project takes 2-3 minutes.
+"#.to_string();
+        }
+    }
 
     ToolCallResult::ok(format!(
         "# fog_scan Complete ✅\n\
@@ -162,19 +222,22 @@ pub fn run_scan(
          - **Files:** {total} scanned, {indexed} indexed, {deleted} deleted\n\
          - **Symbols (new this scan):** {syms}\n\
          - **Edges:** {intra} intra-file + {cross} cross-file = {total_edges} total\n\
-         - **Elapsed:** {elapsed}ms\n\
+         - **Elapsed:** {elapsed}ms\n{bootstrap_hint}\
          \n\
          Next: `fog_lookup`, `fog_inspect`, `fog_impact` to explore the graph.{warnings}{large_repo}",
         fog_id = fog_id,
         path = project_root.display(),
-        total = scanned.len(),
+        total = file_count,
         indexed = stats.files_indexed,
         deleted = stats.files_deleted,
         syms = stats.symbols_created,
         intra = stats.edges_intra,
         cross = stats.edges_cross,
         total_edges = stats.edges_intra + stats.edges_cross,
+        elapsed = elapsed_ms,
+        bootstrap_hint = bootstrap_hint,
         large_repo = large_repo_warning,
+        warnings = warnings,
     ))
 }
 

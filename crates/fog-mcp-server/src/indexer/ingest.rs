@@ -518,25 +518,10 @@ fn is_test_path(path: &str) -> bool {
 // AGENTS.md writer
 // ---------------------------------------------------------------------------
 
-pub fn write_agents_md(root: &Path, files: usize, symbols: usize, elapsed_ms: u128) {
+pub fn write_agents_md(root: &Path, _files: usize, symbols: usize, _elapsed_ms: u128) {
     let agents_path = root.join("AGENTS.md");
     let existing = std::fs::read_to_string(&agents_path).unwrap_or_default();
-    let marker = "<!-- fog-context -->";
     
-    // If the block already exists, we keep it completely static and skip writing.
-    // This prevents unnecessary disk I/O and git noise on every scan.
-    if existing.contains(marker) {
-        return;
-    }
-
-    let prefix = if !existing.is_empty() {
-        format!("{existing}\n\n")
-    } else {
-        String::new()
-    };
-
-    // First-run onboarding block:
-    // Uses universal API (no FoG-specific rules) so it works in any project.
     let onboarding = if symbols > 0 {
         format!(
             "\n\
@@ -546,16 +531,10 @@ pub fn write_agents_md(root: &Path, files: usize, symbols: usize, elapsed_ms: u1
             > Complete these steps **once** to unlock full intelligence:\n\
             \n\
             ```\n\
-            Step 1 - Layer 2 (Business Domains): Map semantic synonyms to exact code\n\
-            fog_assign({{ \"project\": \"<fog_id>\", \"domain\": \"Notification\", \"symbols\": [\"NotificationDispatcher\"] }})\n\
-            fog_assign({{ \"project\": \"<fog_id>\", \"domain\": \"DataAccess\",   \"symbols\": [\"db_query\"] }})\n\
-            \n\
-            Step 2 - Layer 3 (Constraints): Ingest architecture rules from ADR files\n\
-            fog_constraints({{ \"project\": \"<fog_id>\" }})   ← scans logs/decisions/, docs/adr/\n\
-            \n\
-            Step 3 - Layer 4 (Decisions): Record WHY key design decisions were made\n\
-            fog_decisions({{ \"project\": \"<fog_id>\", \"functions\": [\"key_fn\"], \"reason\": \"...\", \"revert_risk\": \"LOW\" }})\n\
-            ```\n",
+            Step 1 - Layer 2 (Business Domains): fog_assign\n\
+            Step 2 - Layer 3 (Constraints): fog_constraints\n\
+            Step 3 - Layer 4 (Decisions): fog_decisions\n\
+            ```\n"
         )
     } else {
         String::new()
@@ -565,60 +544,45 @@ pub fn write_agents_md(root: &Path, files: usize, symbols: usize, elapsed_ms: u1
         "<!-- fog-context -->\n\
          ## fog-context MCP - Agent Instructions\n\
          \n\
-         ### MANDATORY: Start every session\n\
+         ### MANDATORY PROTOCOL\n\
+         1. **Call `fog_brief` First:** Always check index health.\n\
+         2. **Before Editing:** Run `fog_impact({{ \"target\": \"<symbol>\" }})` to check blast radius.\n\
+         3. **After Editing:** Run `fog_decisions` to log WHY the code was changed.\n\
          \n\
-         **Step 0 — Get fog_id (Discover Registry):**\n\
-         Call `fog_roots({{}})` to list all registered projects and grab the target's `fog_id`.\n\
-         If your project is NOT listed, run `fog_scan({{ \"project\": \"/absolute/path/to/project\" }})` to register it first.\n\
+         ### MCP Tools\n\
+         - **Orient:** `fog_domains`, `fog_lookup`\n\
+         - **Understand:** `fog_inspect`, `fog_trace`\n\
+         - **Verify:** `fog_impact`\n\
+         - **Record:** `fog_decisions`\n\
          \n\
-         **Step 1 — Verify project + load domain map:**\n\
-         ```\n\
-         fog_brief({{ \"project\": \"<fog_id>\" }})   → verify project, check version\n\
-         fog_domains({{ \"project\": \"<fog_id>\" }}) → load business domain map\n\
-         ```\n\
-         \n\
-         ### MANDATORY: After Every Significant Change\n\
-         You must invoke the **MCP Tool** `fog_decisions` to record your architecture choices:\n\
-         ```\n\
-         // Call the MCP tool explicitly (DO NOT try to run this as a bash command):\n\
-         fog_decisions({{ \"project\": \"<fog_id>\", \"functions\": [\"changed_fn\"], \"reason\": \"WHY it changed\", \"revert_risk\": \"LOW|MEDIUM|HIGH\" }})\n\
-         ```\n\
-         > Completing a task without using the `fog_decisions` MCP tool = **KNOWLEDGE GAP VIOLATION**.\n\
-         \n\
-         ### Tool Order (All are MCP Tools)\n\
-         1. **Orient:** fog_domains → fog_lookup\n\
-         2. **Understand:** fog_inspect → fog_trace\n\
-         3. **Before edit:** fog_impact (HIGH/CRITICAL → warn user first)\n\
-         4. **After edit:** fog_decisions (record WHY via the MCP tool — see MANDATORY above)\n\
-         \n\
-         ### Version Check\n\
-         When calling `fog_brief`, check the `indexer_version`. If it differs from the server's version, immediately run `fog_scan({{ \"project\": \"<fog_id>\" }})` to refresh the AST database to the new schema.\n\
-         \n\
-         ### Advanced: Handling Framework Magic (IoC, Event Bus, Metaprogramming)\n\
-         If `fog_trace` breaks because of Dependency Injection (Interfaces), Event Buses, or dynamic metaprogramming (like Rails `has_many`), AST cannot see the link. You MUST bridge it via hints:\n\
-         1. Create `.fog-context/hints/<lang>.json` (e.g. `csharp.json`, `ruby.json`)\n\
-         2. Use `extra_calls` to bridge EventBus/IoC: `[ {{ \"from\": \"IUserRepository.Add\", \"to\": \"UserRepository.Add\" }} ]`\n\
-         3. Use `di_annotations` to tag IoC: `[ \"@Inject\", \"@MyService\" ]`\n\
-         4. Use `macro_expansions` to bridge metaprogramming aliases.\n\
-         5. Run `fog_scan({{ \"project\": \"<fog_id>\", \"full\": false }})` immediately to apply the hints to the Graph!\n\
-         \n\
-         ### The \"Typist\" Trap (No Single Source of Truth)\n\
-         Never trust any single source 100% — not the AST graph (which misses framework magic), and not a User Spec (which may lack real-time blast radius context).\n\
-         MANDATORY: If the user provides a complete Hand-off Document, you must still cross-reference it. Always verify the module state via `fog_inspect` or actual file content before editing. Bypassing cross-validation because the \"prompt seemed explicit enough\" is a severe context breach.\n\
-         \n\
-         ### Red Flags - Things to NEVER DO\n\
-         \n\
-         | Forbidden | Correct |\n\
-         |:-----------|:----------|\n\
-         | Trust any single source 100% (Spec or AST) without cross-validation | Always cross-reference the User Hand-off Spec against the actual codebase reality (e.g., via `fog_impact`) before editing. |\n\
-         | Read source files with file tools before checking `context` | Call `fog_inspect` / `fog_lookup` first |\n\
-         | Rename without checking impact | Always check call sites and definitions first |\n\
-         | Edit high-impact code without `fog_impact` check | Always check blast radius |\n\
-         | Make architectural decisions without logging | Log every significant decision |\n\
-         | Ignore `risk: CRITICAL` warnings | Surface them to the user |\n\
+         ⚠️ **Anti-Blackbox Rule:** You MUST NOT bypass cross-validation. \n\
+         Even with a detailed prompt, ALWAYS verify real codebase state via `fog_inspect` before modifying code.\n\
          {onboarding}<!-- /fog-context -->"
     );
-    let _ = std::fs::write(&agents_path, format!("{prefix}{section}"));
+
+    // Replace existing block or append
+    let start_idx = existing.find("<!-- fog-context -->");
+    let end_idx = existing.find("<!-- /fog-context -->").map(|i| i + "<!-- /fog-context -->".len());
+    
+    let new_content = match (start_idx, end_idx) {
+        (Some(start), Some(end)) if start < end => {
+            let mut s = String::new();
+            s.push_str(&existing[..start]);
+            s.push_str(&section);
+            s.push_str(&existing[end..]);
+            s
+        }
+        _ => {
+            if existing.is_empty() {
+                section
+            } else {
+                let pad = if existing.ends_with("\n\n") { "" } else if existing.ends_with('\n') { "\n" } else { "\n\n" };
+                format!("{existing}{pad}{section}")
+            }
+        }
+    };
+    
+    let _ = std::fs::write(&agents_path, new_content);
 }
 
 fn log_global_parser_error(lang: &str, err: &str) {

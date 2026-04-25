@@ -6,6 +6,21 @@ fog-context is a **dual-mode binary** (MCP server + CLI) that serves as the memo
 
 ---
 
+## ⚡ Quick Start
+
+1. Install the binary to `~/.fog/bin/fog-mcp-server` (see [Initial Setup](#-initial-setup))
+2. Add to your AI Editor's MCP config:
+   ```json
+   {
+     "mcpServers": {
+       "fog-context": { "command": "/home/your-user/.fog/bin/fog-mcp-server" }
+     }
+   }
+   ```
+3. Open any project and tell your AI: **"Use fog_scan to index this project."**
+
+---
+
 ## 📋 Overview
 
 - [Initial Setup](#-initial-setup) — Install the binary and configure your AI editor (one-time per machine)

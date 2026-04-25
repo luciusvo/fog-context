@@ -186,37 +186,19 @@ pub fn handle(
 
             // Sprint 3D: mandatory enforcement reminder for empty layers
             if score.total_symbols > 0 {
-                let mut gaps: Vec<String> = Vec::new();
+                if score.total_domains == 0 || score.total_constraints == 0 {
+                    lines.push(r#"
+## 🔴 REQUIRED ACTIONS
+- L2 (Business Domains): fog_assign({ "domain": "...", "symbols": [...] })
+- L3 (Constraints): fog_constraints({})
 
-                if score.total_domains == 0 {
-                    gaps.push(
-                        "  → **Layer 2 empty** - group symbols into domains:\n\
-                         ```\n\
-                         fog_assign({ \"domain\": \"YourFeature\", \"symbols\": [\"fn_a\", \"fn_b\"] })\n\
-                         ```".to_string()
-                    );
-                }
-                if score.total_constraints == 0 {
-                    gaps.push(
-                        "  → **Layer 3 empty** - load architecture rules:\n\
-                         ```\n\
-                         fog_constraints({})       ← scan ADR files\n\
-                         fog_constraints({ \"init\": true })   ← or bootstrap template\n\
-                         ```".to_string()
-                    );
-                }
-                if score.total_decisions == 0 {
-                    gaps.push(
-                        "  → **⚠️  Layer 4 EMPTY** - no decisions recorded. MANDATORY after every change:\n\
-                         ```\n\
-                         fog_decisions({ \"functions\": [\"changed_fn\"], \"reason\": \"WHY\", \"revert_risk\": \"LOW\" })\n\
-                         ```".to_string()
-                    );
+Run before proceeding with any code analysis."#.to_string());
                 }
 
-                if !gaps.is_empty() {
-                    lines.push(format!("\n## 🔴 Knowledge Gaps (Action Required)\n{}", gaps.join("\n\n")));
-                }
+                lines.push(r#"
+## 📋 Session Protocol
+- **BEFORE editing:** fog_impact({ "target": "function_name" })
+- **AFTER editing:** fog_decisions({ "functions": [...], "reason": "WHY" })"#.to_string());
             }
 
             if let Some((project_calls, total_calls)) = session_stats {

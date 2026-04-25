@@ -11,8 +11,6 @@
 //! ```text
 //! fog-harness (gateway_loop)
 //!      │
-//!      ├──▶ fog-memory::Enforcer   ← intercepts tool calls, enforces compliance
-//!      │
 //!      ├──▶ fog-memory::QueryEngine ← direct rusqlite reads (search, context, impact)
 //!      │
 //!      └──▶ fog-memory::WriteEngine ← direct rusqlite writes (decisions, domains, scratchpad)
@@ -29,12 +27,10 @@
 
 pub mod compressor;
 pub mod db;
-pub mod enforcer;
 pub mod query;
 pub mod write;
 
 pub use db::{MemoryDb, open_shared_db};
-pub use enforcer::{Enforcer, EnforcerAction, EnforcerResponse};
 pub use query::DomainDetail;
 
 use std::path::Path;

@@ -1,46 +1,27 @@
 <!-- fog-context -->
 ## fog-context MCP - Agent Instructions
-> Auto-generated 2026-04-25T06:51:43Z | 123 files · 177 symbols · indexed in 427ms
 
-### MANDATORY: Start every session
+### MANDATORY PROTOCOL
+1. **Call `fog_brief` First:** Always check index health.
+2. **Before Editing:** Run `fog_impact({ "target": "<symbol>" })` to check blast radius.
+3. **After Editing:** Run `fog_decisions` to log WHY the code was changed.
 
-**Step 0 — Get fog_id (before any other call):**
-```bash
-# Fastest: read from file
-cat .fog-context/config.toml   # fog_id = "fog_..."
+### MCP Tools
+- **Orient:** `fog_domains`, `fog_lookup`
+- **Understand:** `fog_inspect`, `fog_trace`
+- **Verify:** `fog_impact`
+- **Record:** `fog_decisions`
 
-# Or via MCP:
-fog_brief({ "project": "/absolute/path" })   # → fog_id shown at top
+⚠️ **Anti-Blackbox Rule:** You MUST NOT bypass cross-validation. 
+Even with a detailed prompt, ALWAYS verify real codebase state via `fog_inspect` before modifying code.
+
+### 🔴 First-time Setup — MANDATORY Knowledge Layer Bootstrap
+> fog-context indexed Layer 1 (Physical: 157 symbols). Semantic Layers 2-4 are empty — Knowledge Score: 0/100.
+> Complete these steps **once** to unlock full intelligence:
+
 ```
-
-**Step 1 — Verify project + load domain map:**
+Step 1 - Layer 2 (Business Domains): fog_assign
+Step 2 - Layer 3 (Constraints): fog_constraints
+Step 3 - Layer 4 (Decisions): fog_decisions
 ```
-fog_brief({ "project": "<fog_id>" })   → verify project, check version
-fog_domains({ "project": "<fog_id>" }) → load business domain map
-```
-
-### Tool Order
-1. **Orient:** fog_domains → fog_lookup
-2. **Understand:** fog_inspect → fog_trace
-3. **Before edit:** fog_impact (HIGH/CRITICAL → warn user first)
-4. **After edit:** fog_decisions { functions, reason, revert_risk } (**MANDATORY**)
-
-### Version Check
-`fog_brief` shows: `Indexed by: v0.6.x`
-If binary version ≠ indexed version → 🆕 banner appears → run fog_scan to refresh.
-
-### 🪄 Advanced: Handling Framework Magic (IoC, Event Bus, Metaprogramming)
-If `fog_trace` breaks because of Dependency Injection (Interfaces), Event Buses, or dynamic metaprogramming (like Rails `has_many`), AST cannot see the link. You MUST bridge it via hints:
-1. Create `.fog-context/hints/<lang>.json` (e.g. `csharp.json`, `ruby.json`)
-2. Use `extra_calls` to bridge EventBus/IoC: `[ { "from": "IUserRepository.Add", "to": "UserRepository.Add" } ]`
-3. Use `di_annotations` to tag IoC: `[ "@Inject", "@MyService" ]`
-4. Use `macro_expansions` to bridge metaprogramming aliases.
-5. Run `fog_scan(full=false)` immediately to apply the hints to the Graph!
-
-### Large Repos (>1000 files)
-Prefer CLI for initial index (shows progress, no MCP timeout):
-```bash
-fog-mcp-server index --project /path/to/project
-```
-Then use MCP tools for all queries.
 <!-- /fog-context -->

@@ -3,7 +3,7 @@
 //! Gitignore-aware file walker using the `ignore` crate (same as ripgrep).
 //! Filters to supported languages only.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use ignore::WalkBuilder;
 
 use super::langs::lang_for_extension;

@@ -71,6 +71,11 @@ pub fn handle(args: &Value, db: &MemoryDb, project_root: &Path) -> ToolCallResul
                     "\n⚠️  **Stop** - risk is {}. Get explicit user approval before editing.", result.risk
                 ));
             }
+            if matches!(result.risk.as_str(), "MEDIUM" | "HIGH" | "CRITICAL") {
+                lines.push(format!(
+                    "\n> 📝 **MANDATORY:** Risk is {}. You MUST call `fog_decisions` after making changes to record WHY you edited this.", result.risk
+                ));
+            }
             if let Some(hint) = &result._agent_hint {
                 lines.push(format!("\n💡 {hint}"));
             }

@@ -1058,7 +1058,7 @@ impl MemoryDb {
                 }).map_err(crate::MemoryError::Database)?.flatten().collect();
                 Ok(results)
             }
-            other => Err(crate::MemoryError::Database(
+            _other => Err(crate::MemoryError::Database(
                 rusqlite::Error::InvalidQuery
             )),
         }
