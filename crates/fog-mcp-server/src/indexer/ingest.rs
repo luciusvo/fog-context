@@ -578,16 +578,18 @@ pub fn write_agents_md(root: &Path, files: usize, symbols: usize, elapsed_ms: u1
          ```\n\
          \n\
          ### MANDATORY: After Every Significant Change\n\
+         You must invoke the **MCP Tool** `fog_decisions` to record your architecture choices:\n\
          ```\n\
+         // Call the MCP tool explicitly (DO NOT try to run this as a bash command):\n\
          fog_decisions({{ \"project\": \"<fog_id>\", \"functions\": [\"changed_fn\"], \"reason\": \"WHY it changed\", \"revert_risk\": \"LOW|MEDIUM|HIGH\" }})\n\
          ```\n\
-         > Completing a task without recording WHY = **KNOWLEDGE GAP VIOLATION**.\n\
+         > Completing a task without using the `fog_decisions` MCP tool = **KNOWLEDGE GAP VIOLATION**.\n\
          \n\
-         ### Tool Order\n\
+         ### Tool Order (All are MCP Tools)\n\
          1. **Orient:** fog_domains → fog_lookup\n\
          2. **Understand:** fog_inspect → fog_trace\n\
          3. **Before edit:** fog_impact (HIGH/CRITICAL → warn user first)\n\
-         4. **After edit:** fog_decisions (record WHY — see MANDATORY above)\n\
+         4. **After edit:** fog_decisions (record WHY via the MCP tool — see MANDATORY above)\n\
          \n\
          ### Version Check\n\
          When calling `fog_brief`, check the `indexer_version`. If it differs from the server's version, immediately run `fog_scan({{ \"project\": \"<fog_id>\" }})` to refresh the AST database to the new schema.\n\

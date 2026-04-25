@@ -60,10 +60,12 @@ fog_decisions({ functions: ["key_fn"], reason: "...", revert_risk: "LOW" })
 ```
 
 ### 🔴 MANDATORY: After Every Significant Change
+You must invoke the **MCP Tool** `fog_decisions` to record your architecture choices:
 ```
+// Call the MCP tool explicitly (DO NOT try to run this as a bash command):
 fog_decisions({ functions: ["changed_fn"], reason: "WHY it changed", revert_risk: "LOW|MEDIUM|HIGH" })
 ```
-> Completing a task without recording WHY = **KNOWLEDGE GAP VIOLATION**.
+> Completing a task without using the `fog_decisions` MCP tool = **KNOWLEDGE GAP VIOLATION**.
 > Context Maturity visualization will update as you populate Layers 2-4.
 
 <!-- /fog-context -->
