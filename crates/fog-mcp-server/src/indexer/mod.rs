@@ -31,7 +31,6 @@ pub struct IndexStats {
     pub symbols_created: usize,
     pub edges_intra: usize,
     pub edges_cross: usize,
-    pub elapsed_ms: u128,
     /// Query compile errors per language (non-empty = some language was not indexed).
     /// Example: ["tsx: QueryError { kind: Structure }"]
     pub query_errors: Vec<String>,
@@ -78,7 +77,7 @@ pub fn run_scan(
 
     let elapsed = start.elapsed().as_millis();
 
-    let fog_id = phase_register(project_root, db, scanned.len(), stats.symbols_created, elapsed);
+    let fog_id = phase_register(project_root, db, scanned.len(), stats.symbols_created);
 
     phase_format_result(project_root, db, &stats, &fog_id, scanned.len(), elapsed)
 }
@@ -110,9 +109,8 @@ fn phase_register(
     db: &fog_memory::MemoryDb,
     file_count: usize,
     symbol_count: usize,
-    elapsed_ms: u128,
 ) -> String {
-    ingest::write_agents_md(project_root, file_count, symbol_count, elapsed_ms);
+    ingest::write_agents_md(project_root, file_count, symbol_count);
     let fog_id = crate::registry::ensure_project_id(&project_root.to_string_lossy());
     {
         let mut cfg = crate::registry::ProjectConfig::load(project_root);

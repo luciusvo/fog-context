@@ -96,41 +96,10 @@ pub fn handle(
             // Fix 2: When project is not yet indexed, quickly count files so the
             // agent can decide CLI vs MCP BEFORE submitting fog_scan.
             let unindexed_advisory = if score.total_symbols == 0 {
-                let file_count = walkdir::WalkDir::new(project_root)
-                    .follow_links(false)
-                    .max_depth(15)
-                    .into_iter()
-                    .filter_map(|e| e.ok())
-                    .filter(|e| e.file_type().is_file())
-                    .filter(|e| {
-                        // Skip .fog-context/ and common non-source dirs
-                        !e.path().components().any(|c| {
-                            let s = c.as_os_str().to_str().unwrap_or("");
-                            matches!(s, ".fog-context" | ".git" | "node_modules" | "target" | "dist" | "build" | ".gradle")
-                        })
-                    })
-                    .count();
-
-                if file_count > 1000 {
-                    format!(
-                        "\n\n> ⚠️ **Large project (~{file_count} source files detected)**\n\
-                         > Use CLI for initial indexing — shows progress, no MCP timeout risk:\n\
-                         > ```bash\n\
-                         > fog-mcp-server index --project {}\n\
-                         > ```\n\
-                         > After CLI index completes, use `fog_brief` + MCP tools normally.",
-                        project_root.display()
-                    )
-                } else if file_count > 0 {
-                    format!(
-                        "\n\n> 📁 **~{file_count} source files detected.** Index with:\n\
-                         > ```\n\
-                         > fog_scan({{ \"project\": \"{fog_id}\" }})\n\
-                         > ```"
-                    )
-                } else {
-                    String::new()
-                }
+                format!(
+                    "\n\n> ⚠️ **Project not yet indexed.**\n\
+                     > Run `fog_scan({{}})` to index. Large projects (>1000 files) will automatically be redirected to the CLI."
+                )
             } else {
                 String::new()
             };

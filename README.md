@@ -18,6 +18,7 @@ fog-context is a **dual-mode binary** (MCP server + CLI) that serves as the memo
    }
    ```
 3. Open any project and tell your AI: **"Use fog_scan to index this project."**
+4. For first-time setups, tell your AI: **"Populate the knowledge layers using fog_assign, fog_constraints, and fog_decisions. Use a mid-tier model if needed."**
 
 ---
 

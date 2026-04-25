@@ -518,7 +518,7 @@ fn is_test_path(path: &str) -> bool {
 // AGENTS.md writer
 // ---------------------------------------------------------------------------
 
-pub fn write_agents_md(root: &Path, _files: usize, symbols: usize, _elapsed_ms: u128) {
+pub fn write_agents_md(root: &Path, _files: usize, symbols: usize) {
     let agents_path = root.join("AGENTS.md");
     let existing = std::fs::read_to_string(&agents_path).unwrap_or_default();
     
@@ -543,6 +543,9 @@ pub fn write_agents_md(root: &Path, _files: usize, symbols: usize, _elapsed_ms: 
     let section = format!(
         "<!-- fog-context -->\n\
          ## fog-context MCP - Agent Instructions\n\
+         \n\
+         > [!WARNING]\n\
+         > **⚠️ ALL `fog_*` commands are MCP Tools.** Do NOT run them via bash/shell.\n\
          \n\
          ### MANDATORY PROTOCOL\n\
          1. **Call `fog_brief` First:** Always check index health.\n\
