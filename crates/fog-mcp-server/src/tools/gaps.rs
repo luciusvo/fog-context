@@ -52,11 +52,7 @@ pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> To
         Err(e) => return ToolCallResult::err(format!("fog_gaps: DB open error: {e}")),
     };
 
-    let last_indexed = crate::registry::Registry::load()
-        .find(&project_root.to_string_lossy())
-        .and_then(|e| e.last_indexed.clone());
-    let stale_status = crate::stale::check_stale(project_root, "*", last_indexed.as_deref());
-    let stale_warn = crate::stale::format_warning(&stale_status, "fog_gaps").unwrap_or_default();
+    let stale_warn = crate::stale::quick_check(project_root, "fog_gaps");
 
     match run_template(&conn, template, params) {
         Ok(results) => {

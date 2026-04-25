@@ -171,6 +171,7 @@ fn import_brv(ctx_tree: &Path, db: &fog_memory::MemoryDb, dry_run: bool, report:
                 let _ = db.define_domain(DefineDomainArgs {
                     name: d.name.clone(),
                     keywords: Some(d.keywords.clone()),
+                    aliases: None,
                     symbols: None,
                     constraints: None,
                 });

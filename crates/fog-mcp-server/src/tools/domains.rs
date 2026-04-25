@@ -24,11 +24,7 @@ pub fn definition() -> ToolDef {
 }
 
 pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> ToolCallResult {
-    let last_indexed = crate::registry::Registry::load()
-        .find(&project_root.to_string_lossy())
-        .and_then(|e| e.last_indexed.clone());
-    let stale_status = crate::stale::check_stale(project_root, "*", last_indexed.as_deref());
-    let stale_warn = crate::stale::format_warning(&stale_status, "fog_domains").unwrap_or_default();
+    let stale_warn = crate::stale::quick_check(project_root, "fog_domains");
 
     if let Some(domain) = args["domain"].as_str() {
         match db.query_domain(domain) {

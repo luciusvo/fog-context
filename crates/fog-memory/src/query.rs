@@ -140,13 +140,32 @@ impl MemoryDb {
     ///
     /// PATTERN_DECISION: Level 1 (Pure Function)
     pub fn search(&self, query: &str, limit: usize, kind: Option<&str>) -> MemoryResult<Vec<SearchHit>> {
+        let conn = self.conn();
         let limit = limit.min(100);
-        // Prefix search if ends with *
-        let fts_query = if query.ends_with('*') {
-            query.to_string()
+        
+        let clean_query = query.trim_end_matches('*');
+        let mut fts_terms = vec![];
+        
+        if query.ends_with('*') {
+            fts_terms.push(query.to_string());
         } else {
-            format!("{query}*")  // auto prefix-match for partial names
-        };
+            fts_terms.push(format!("{}*", clean_query));
+        }
+
+        // WP-6 Semantic Synonym Expansion
+        if let Ok(mut stmt) = conn.prepare("SELECT keywords FROM domains WHERE name = ?1 OR keywords LIKE ?2 LIMIT 1") {
+            let like_query = format!("%{}%", clean_query);
+            if let Ok(kws) = stmt.query_row(rusqlite::params![clean_query, like_query], |row| row.get::<_, String>(0)) {
+                for kw in kws.split(',') {
+                    let kw = kw.trim();
+                    if !kw.is_empty() && kw != clean_query {
+                        fts_terms.push(format!("{}*", kw));
+                    }
+                }
+            }
+        }
+
+        let fts_query = fts_terms.join(" OR ");
 
         let kind_clause = if kind.is_some() { "AND s.kind = ?3" } else { "" };
         let sql = format!(
@@ -163,7 +182,6 @@ impl MemoryDb {
              LIMIT ?2",
         );
 
-        let conn = self.conn();
         let mut stmt = conn.prepare(&sql).map_err(crate::MemoryError::Database)?;
 
         let hits = if let Some(k) = kind {

@@ -140,3 +140,13 @@ pub fn format_warning(status: &StaleStatus, tool_name: &str) -> Option<String> {
         _ => None,
     }
 }
+
+/// Quick helper to check project staleness and return the formatted warning string.
+/// Returns empty string if project is fresh.
+pub fn quick_check(project_root: &Path, tool_name: &str) -> String {
+    let last_indexed = crate::registry::Registry::load()
+        .find(&project_root.to_string_lossy())
+        .and_then(|e| e.last_indexed.clone());
+    let stale_status = check_stale(project_root, "*", last_indexed.as_deref());
+    format_warning(&stale_status, tool_name).unwrap_or_default()
+}

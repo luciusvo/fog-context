@@ -54,11 +54,7 @@ pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> To
     let max_symbols = args["max_symbols"].as_u64().unwrap_or(100) as usize;
     let include_docs = args["include_docs"].as_bool().unwrap_or(false);
 
-    let last_indexed = crate::registry::Registry::load()
-        .find(&project_root.to_string_lossy())
-        .and_then(|e| e.last_indexed.clone());
-    let stale_status = crate::stale::check_stale(project_root, "*", last_indexed.as_deref());
-    let stale_warn = crate::stale::format_warning(&stale_status, "fog_outline").unwrap_or_default();
+    let stale_warn = crate::stale::quick_check(project_root, "fog_outline");
 
     // Query symbols by file path prefix from the symbols+files tables
     match db.skeleton(path, max_symbols, kind_filter, include_docs) {

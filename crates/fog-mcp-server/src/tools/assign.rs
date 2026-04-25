@@ -19,6 +19,7 @@ pub fn definition() -> ToolDef {
                 "domain": { "type": "string", "description": "Alias for 'name'. Either 'name' or 'domain' is required." },
                 "symbols": { "type": "array", "items": { "type": "string" } },
                 "keywords": { "type": "array", "items": { "type": "string" } },
+                "aliases": { "type": "array", "items": { "type": "string" } },
                 "constraints": { "type": "array", "items": { "type": "string" } },
                 "project": { "type": "string" }
             }
@@ -44,6 +45,9 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
     let keywords: Vec<String> = args["keywords"].as_array()
         .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
         .unwrap_or_default();
+    let aliases: Vec<String> = args["aliases"].as_array()
+        .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
     let constraints: Vec<String> = args["constraints"].as_array()
         .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
         .unwrap_or_default();
@@ -52,6 +56,7 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
         name: name.to_string(),
         symbols: if symbols.is_empty() { None } else { Some(symbols.clone()) },
         keywords: if keywords.is_empty() { None } else { Some(keywords) },
+        aliases: if aliases.is_empty() { None } else { Some(aliases) },
         constraints: if constraints.is_empty() { None } else { Some(constraints) },
     };
 

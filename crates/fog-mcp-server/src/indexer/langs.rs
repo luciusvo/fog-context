@@ -141,8 +141,8 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: GO_DEF_QUERY,
             call_query: GO_CALL_QUERY,
             kinds: GO_KINDS,
-            bridge_query: None,
-            bridge_edge_kind: "CALLS",
+            bridge_query: Some(GO_BRIDGE_QUERY),
+            bridge_edge_kind: "DI_INJECT",
         }),
         "c" => Some(LangConfig {
             name: "c",
@@ -177,8 +177,8 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: CS_DEF_QUERY,
             call_query: CS_CALL_QUERY,
             kinds: CS_KINDS,
-            bridge_query: None,
-            bridge_edge_kind: "CALLS",
+            bridge_query: Some(CS_BRIDGE_QUERY),
+            bridge_edge_kind: "DI_INJECT",
         }),
         "ruby" => Some(LangConfig {
             name: "ruby",
@@ -186,8 +186,8 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: RUBY_DEF_QUERY,
             call_query: RUBY_CALL_QUERY,
             kinds: RUBY_KINDS,
-            bridge_query: None,
-            bridge_edge_kind: "CALLS",
+            bridge_query: Some(RUBY_BRIDGE_QUERY),
+            bridge_edge_kind: "FRAMEWORK_LINK",
         }),
         "php" => Some(LangConfig {
             name: "php",
@@ -195,8 +195,8 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: PHP_DEF_QUERY,
             call_query: PHP_CALL_QUERY,
             kinds: PHP_KINDS,
-            bridge_query: None,
-            bridge_edge_kind: "CALLS",
+            bridge_query: Some(PHP_BRIDGE_QUERY),
+            bridge_edge_kind: "DI_INJECT",
         }),
         #[cfg(feature = "kotlin")]
         "kotlin" => Some(LangConfig {
@@ -205,8 +205,8 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: KOTLIN_DEF_QUERY,
             call_query: KOTLIN_CALL_QUERY,
             kinds: KOTLIN_KINDS,
-            bridge_query: None,
-            bridge_edge_kind: "CALLS",
+            bridge_query: Some(KOTLIN_BRIDGE_QUERY),
+            bridge_edge_kind: "DI_INJECT",
         }),
         #[cfg(feature = "swift")]
         "swift" => Some(LangConfig {
@@ -215,8 +215,8 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: SWIFT_DEF_QUERY,
             call_query: SWIFT_CALL_QUERY,
             kinds: SWIFT_KINDS,
-            bridge_query: None,
-            bridge_edge_kind: "CALLS",
+            bridge_query: Some(SWIFT_BRIDGE_QUERY),
+            bridge_edge_kind: "FRAMEWORK_LINK",
         }),
         #[cfg(feature = "dart")]
         "dart" => Some(LangConfig {
@@ -225,8 +225,8 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             def_query: DART_DEF_QUERY,
             call_query: DART_CALL_QUERY,
             kinds: DART_KINDS,
-            bridge_query: None,
-            bridge_edge_kind: "CALLS",
+            bridge_query: Some(DART_BRIDGE_QUERY),
+            bridge_edge_kind: "DI_INJECT",
         }),
         "lua" => Some(LangConfig {
             name: "lua",
@@ -536,3 +536,83 @@ const TS_BRIDGE_QUERY: &str = r#"
   function: (identifier) @_fn
   arguments: (arguments (string (string_fragment) @name)))
 "#;
+
+// C#: [Inject] annotated properties or fields
+const CS_BRIDGE_QUERY: &str = r#"
+(property_declaration
+  (attribute_list (attribute name: (identifier) @_ann))
+  type: (identifier) @name)
+(field_declaration
+  (attribute_list (attribute name: (identifier) @_ann))
+  (variable_declaration type: (identifier) @name))
+"#;
+
+// Ruby: has_many, belongs_to, validates
+const RUBY_BRIDGE_QUERY: &str = r#"
+(call
+  method: (identifier) @_ann
+  arguments: (argument_list (simple_symbol) @name))
+"#;
+
+// Go: Struct embedding for DI interfaces
+const GO_BRIDGE_QUERY: &str = r#"
+(struct_type
+  (field_declaration_list
+    (field_declaration type: (type_identifier) @name)))
+"#;
+
+// PHP: Attributes like #[Inject]
+const PHP_BRIDGE_QUERY: &str = r#"
+(property_declaration
+  attributes: (attribute_list (attribute_group (attribute (name) @_ann)))
+  (property_element name: (variable_name (name) @name)))
+"#;
+
+// Kotlin: @Inject or @Autowired
+#[cfg(feature = "kotlin")]
+const KOTLIN_BRIDGE_QUERY: &str = r#"
+(property_declaration
+  (modifiers (annotation (user_type (type_identifier) @_ann)))
+  (variable_declaration (simple_identifier) @name))
+"#;
+
+// Swift: @propertyWrapper or @Environment
+#[cfg(feature = "swift")]
+const SWIFT_BRIDGE_QUERY: &str = r#"
+(property_declaration
+  (modifiers (attribute (user_type (type_identifier) @_ann)))
+  name: (pattern bound_identifier: (simple_identifier) @name))
+"#;
+
+// Dart: @Inject
+#[cfg(feature = "dart")]
+const DART_BRIDGE_QUERY: &str = r#"
+(class_member
+  (annotation name: (identifier) @_ann)
+  (declaration (initialized_identifier_list (initialized_identifier name: (identifier) @name))))
+"#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bridge_queries() {
+        tree_sitter::Query::new(&tree_sitter_java::LANGUAGE.into(), JAVA_BRIDGE_QUERY).unwrap();
+        tree_sitter::Query::new(&tree_sitter_python::LANGUAGE.into(), PY_BRIDGE_QUERY).unwrap();
+        tree_sitter::Query::new(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(), TS_BRIDGE_QUERY).unwrap();
+        tree_sitter::Query::new(&tree_sitter_c_sharp::LANGUAGE.into(), CS_BRIDGE_QUERY).unwrap();
+        tree_sitter::Query::new(&tree_sitter_ruby::LANGUAGE.into(), RUBY_BRIDGE_QUERY).unwrap();
+        tree_sitter::Query::new(&tree_sitter_go::LANGUAGE.into(), GO_BRIDGE_QUERY).unwrap();
+        tree_sitter::Query::new(&tree_sitter_php::LANGUAGE_PHP.into(), PHP_BRIDGE_QUERY).unwrap();
+
+        #[cfg(feature = "kotlin")]
+        tree_sitter::Query::new(&get_kotlin(), KOTLIN_BRIDGE_QUERY).unwrap();
+
+        #[cfg(feature = "swift")]
+        tree_sitter::Query::new(&get_swift(), SWIFT_BRIDGE_QUERY).unwrap();
+
+        #[cfg(feature = "dart")]
+        tree_sitter::Query::new(&get_dart(), DART_BRIDGE_QUERY).unwrap();
+    }
+}

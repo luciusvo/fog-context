@@ -34,11 +34,7 @@ pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> To
     let limit = args["limit"].as_u64().unwrap_or(30) as usize;
     let kind = args["kind"].as_str();
 
-    let last_indexed = crate::registry::Registry::load()
-        .find(&project_root.to_string_lossy())
-        .and_then(|e| e.last_indexed.clone());
-    let stale_status = crate::stale::check_stale(project_root, "*", last_indexed.as_deref());
-    let stale_warn = crate::stale::format_warning(&stale_status, "fog_lookup").unwrap_or_default();
+    let stale_warn = crate::stale::quick_check(project_root, "fog_lookup");
 
     match db.search(query, limit, kind) {
         Ok(results) => {

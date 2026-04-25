@@ -30,6 +30,7 @@ pub struct RecordDecisionArgs {
 pub struct DefineDomainArgs {
     pub name: String,
     pub keywords: Option<Vec<String>>,
+    pub aliases: Option<Vec<String>>,
     pub symbols: Option<Vec<String>>,
     pub constraints: Option<Vec<String>>,
 }
@@ -130,9 +131,15 @@ impl MemoryDb {
     pub fn define_domain(&self, args: DefineDomainArgs) -> MemoryResult<()> {
         let conn = self.conn();
 
-        let keywords_str = args.keywords.as_ref()
-            .map(|kw| kw.join(","))
-            .unwrap_or_default();
+        let mut combined_keywords = args.keywords.clone().unwrap_or_default();
+        if let Some(aliases) = &args.aliases {
+            for alias in aliases {
+                if !combined_keywords.contains(alias) {
+                    combined_keywords.push(alias.clone());
+                }
+            }
+        }
+        let keywords_str = combined_keywords.join(",");
 
         // Upsert domain
         conn.execute(
