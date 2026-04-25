@@ -29,6 +29,8 @@ mod registry;
 mod router;
 mod stale;
 mod tools;
+#[cfg(feature = "embedding")]
+pub mod semantic;
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};

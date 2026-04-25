@@ -508,6 +508,7 @@ fn tokenize_name(name: &str) -> Option<String> {
     if r == name.to_lowercase() { None } else { Some(r) }
 }
 
+#[allow(dead_code)]
 fn is_test_path(path: &str) -> bool {
     let p = path.to_lowercase();
     p.contains("/test") || p.contains("_test.") || p.contains(".test.")

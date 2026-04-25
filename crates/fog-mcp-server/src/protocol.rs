@@ -20,6 +20,7 @@ use serde_json::Value;
 /// Incoming MCP request from the client (AI IDE).
 #[derive(Debug, Deserialize)]
 pub struct McpRequest {
+    #[allow(dead_code)]
     pub jsonrpc: String,
     pub id: Option<Value>,   // null for notifications
     pub method: String,
@@ -57,9 +58,12 @@ pub struct McpError {
 // ---------------------------------------------------------------------------
 
 pub const ERR_PARSE:       i32 = -32700;
+#[allow(dead_code)]
 pub const ERR_INVALID_REQ: i32 = -32600;
 pub const ERR_METHOD:      i32 = -32601;
+#[allow(dead_code)]
 pub const ERR_INVALID_PARAMS: i32 = -32602;
+#[allow(dead_code)]
 pub const ERR_INTERNAL:    i32 = -32603;
 
 // ---------------------------------------------------------------------------
@@ -95,6 +99,7 @@ impl ToolCallResult {
         }
     }
 
+    #[allow(dead_code)]
     pub fn ok_json(v: &Value) -> Self {
         Self {
             content: vec![TextContent::text(serde_json::to_string_pretty(v).unwrap_or_default())],

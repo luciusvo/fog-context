@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchHit {
+    pub id: i64,
     pub name: String,
     pub kind: String,
     pub file: String,
@@ -172,7 +173,7 @@ impl MemoryDb {
 
         let kind_clause = if kind.is_some() { "AND s.kind = ?3" } else { "" };
         let sql = format!(
-            "SELECT s.name, s.kind, f.path, s.start_line, s.end_line,
+            "SELECT s.id, s.name, s.kind, f.path, s.start_line, s.end_line,
                     s.signature,
                     snippet(symbols_fts, 3, '«', '»', '…', 12) as doc_snippet,
                     bm25(symbols_fts, 3, 3, 2, 1) as bm25_score,
@@ -212,6 +213,49 @@ impl MemoryDb {
         // Sort by relevance desc, truncate to limit
         results.sort_by(|a, b| b.relevance.partial_cmp(&a.relevance).unwrap_or(std::cmp::Ordering::Equal));
         results.truncate(limit);
+
+        Ok(results)
+    }
+
+    // ---------------------------------------------------------------------------
+    // fetch_symbol_embeddings() - Layer 1 (Semantic)
+    // ---------------------------------------------------------------------------
+
+    /// Fetch embedding vectors for a batch of symbol IDs.
+    ///
+    /// Returns a vector of tuples: (symbol_id, vector_as_f32).
+    /// Skips any symbol_ids that do not have an embedding.
+    ///
+    /// PATTERN_DECISION: Level 1 (Pure Function)
+    pub fn fetch_symbol_embeddings(&self, symbol_ids: &[i64]) -> MemoryResult<Vec<(i64, Vec<f32>)>> {
+        if symbol_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let conn = self.conn();
+        let placeholders = symbol_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = format!("SELECT symbol_id, vector FROM symbol_embeddings WHERE symbol_id IN ({placeholders})");
+
+        let mut stmt = conn.prepare(&sql).map_err(crate::MemoryError::Database)?;
+        
+        let rows = stmt.query_map(rusqlite::params_from_iter(symbol_ids), |row| {
+            let sym_id: i64 = row.get(0)?;
+            let blob: Vec<u8> = row.get(1)?;
+            
+            // Deserialize little-endian bytes to f32
+            let mut vector = Vec::with_capacity(blob.len() / 4);
+            for chunk in blob.chunks_exact(4) {
+                let bytes: [u8; 4] = chunk.try_into().unwrap_or([0; 4]);
+                vector.push(f32::from_le_bytes(bytes));
+            }
+            
+            Ok((sym_id, vector))
+        }).map_err(crate::MemoryError::Database)?;
+
+        let mut results = Vec::new();
+        for row in rows.flatten() {
+            results.push(row);
+        }
 
         Ok(results)
     }
@@ -797,7 +841,7 @@ impl MemoryDb {
 
         // Use a single sql path with optional kind filter applied post-query to avoid closure type issues
         let base_sql = format!(
-            "SELECT s.name, s.kind, f.path, s.start_line, s.end_line,
+            "SELECT s.id, s.name, s.kind, f.path, s.start_line, s.end_line,
                     s.signature, s.doc
              FROM symbols s
              JOIN files f ON f.id = s.file_id
@@ -809,13 +853,14 @@ impl MemoryDb {
 
         let mut stmt = conn.prepare(&base_sql).map_err(crate::MemoryError::Database)?;
         let hit_map = |row: &rusqlite::Row<'_>| Ok(SearchHit {
-            name: row.get(0)?,
-            kind: row.get(1)?,
-            file: row.get(2)?,
-            start_line: row.get(3)?,
-            end_line: row.get(4)?,
-            signature: row.get(5)?,
-            doc_snippet: row.get(6)?,
+            id: row.get(0)?,
+            name: row.get(1)?,
+            kind: row.get(2)?,
+            file: row.get(3)?,
+            start_line: row.get(4)?,
+            end_line: row.get(5)?,
+            signature: row.get(6)?,
+            doc_snippet: row.get(7)?,
             relevance: 1.0,
         });
 
@@ -847,7 +892,7 @@ impl MemoryDb {
         let fuzzy_glob = format!("%{path}%");
 
         let base_sql = format!(
-            "SELECT s.name, s.kind, f.path, s.start_line, s.end_line,
+            "SELECT s.id, s.name, s.kind, f.path, s.start_line, s.end_line,
                     s.signature, s.doc
              FROM symbols s
              JOIN files f ON f.id = s.file_id
@@ -859,13 +904,14 @@ impl MemoryDb {
 
         let mut stmt = conn.prepare(&base_sql).map_err(crate::MemoryError::Database)?;
         let hit_map = |row: &rusqlite::Row<'_>| Ok(SearchHit {
-            name: row.get(0)?,
-            kind: row.get(1)?,
-            file: row.get(2)?,
-            start_line: row.get(3)?,
-            end_line: row.get(4)?,
-            signature: row.get(5)?,
-            doc_snippet: row.get(6)?,
+            id: row.get(0)?,
+            name: row.get(1)?,
+            kind: row.get(2)?,
+            file: row.get(3)?,
+            start_line: row.get(4)?,
+            end_line: row.get(5)?,
+            signature: row.get(6)?,
+            doc_snippet: row.get(7)?,
             relevance: 0.8, // lower relevance: fuzzy match
         });
 
@@ -1080,18 +1126,19 @@ pub struct DomainDetail {
 // ---------------------------------------------------------------------------
 
 fn map_search_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SearchHit> {
-    let bm25: f64 = row.get(7)?;
-    let centrality: f64 = row.get(8)?;
+    let bm25: f64 = row.get(8)?;
+    let centrality: f64 = row.get(9)?;
     // Normalize BM25 (negative) to relevance [0,1] + centrality boost
     let relevance = 1.0 / (1.0 + bm25.abs()) * (1.0 + 0.1 * centrality);
     Ok(SearchHit {
-        name: row.get(0)?,
-        kind: row.get(1)?,
-        file: row.get(2)?,
-        start_line: row.get(3)?,
-        end_line: row.get(4)?,
-        signature: row.get(5)?,
-        doc_snippet: row.get(6)?,
+        id: row.get(0)?,
+        name: row.get(1)?,
+        kind: row.get(2)?,
+        file: row.get(3)?,
+        start_line: row.get(4)?,
+        end_line: row.get(5)?,
+        signature: row.get(6)?,
+        doc_snippet: row.get(7)?,
         relevance,
     })
 }

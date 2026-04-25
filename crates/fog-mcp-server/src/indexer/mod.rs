@@ -77,6 +77,8 @@ pub fn run_scan(
 
     let elapsed = start.elapsed().as_millis();
 
+    phase_embed(db, stats.symbols_created);
+
     let fog_id = phase_register(project_root, db, scanned.len(), stats.symbols_created);
 
     phase_format_result(project_root, db, &stats, &fog_id, scanned.len(), elapsed)
@@ -103,6 +105,64 @@ fn phase_parse(
     eprintln!("[fog] ✓ Pass 2 done: {} cross-file edges", stats.edges_cross);
     Ok(stats)
 }
+
+#[cfg(feature = "embedding")]
+fn phase_embed(db: &fog_memory::MemoryDb, _new_symbols_count: usize) {
+    let _model = match crate::semantic::get_model() {
+        Some(m) => m,
+        None => {
+            eprintln!("[fog] 3/5 ⏭️  Semantic model missing. Skipping ONNX embeddings.");
+            return;
+        }
+    };
+    
+    eprintln!("[fog] 3/5 🧠 Generating embeddings for missing symbols...");
+    
+    let conn = db.conn();
+    let mut stmt = match conn.prepare(
+        "SELECT id, name, doc, signature FROM symbols WHERE id NOT IN (SELECT symbol_id FROM symbol_embeddings)"
+    ) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!("Failed to prepare embedding query: {}", e);
+            return;
+        }
+    };
+    
+    let rows = match stmt.query_map([], |row: &rusqlite::Row<'_>| {
+        Ok((
+            row.get::<usize, i64>(0)?,
+            row.get::<usize, String>(1)?,
+            row.get::<usize, Option<String>>(2)?,
+            row.get::<usize, Option<String>>(3)?,
+        ))
+    }) {
+        Ok(r) => r,
+        Err(_) => return,
+    };
+    
+    let mut count = 0;
+    for row_res in rows {
+        let (id, name, doc, sig) = match row_res {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        let mut text: String = name;
+        if let Some(s) = sig { text.push_str(&format!(" {}", s)); }
+        if let Some(d) = doc { text.push_str(&format!(" {}", d)); }
+        
+        if let Ok(vector) = crate::semantic::embed_text(&text) {
+            let _ = db.insert_symbol_embeddings(id, &vector);
+            count += 1;
+        }
+    }
+    if count > 0 {
+        eprintln!("[fog] ✓ Generated {} semantic embeddings", count);
+    }
+}
+
+#[cfg(not(feature = "embedding"))]
+fn phase_embed(_db: &fog_memory::MemoryDb, _new_symbols_count: usize) {}
 
 fn phase_register(
     project_root: &Path,

@@ -115,6 +115,10 @@ CREATE TABLE IF NOT EXISTS meta (
     value TEXT
 );
 INSERT OR IGNORE INTO meta(key, value) VALUES ('schema_version', '0.4.0');
+CREATE TABLE IF NOT EXISTS symbol_embeddings (
+    symbol_id INTEGER PRIMARY KEY REFERENCES symbols(id) ON DELETE CASCADE,
+    vector BLOB NOT NULL
+);
 ";
 
 // ---------------------------------------------------------------------------
@@ -129,7 +133,7 @@ pub struct MemoryDb {
 
 impl MemoryDb {
     /// Get a reference to the raw connection (for advanced queries in sub-modules).
-    pub(crate) fn conn(&self) -> &Connection {
+    pub fn conn(&self) -> &Connection {
         &self.conn
     }
 
@@ -263,6 +267,14 @@ fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
         )?;
     }
 
+    // v0.4: added symbol_embeddings table
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS symbol_embeddings (
+            symbol_id INTEGER PRIMARY KEY REFERENCES symbols(id) ON DELETE CASCADE,
+            vector BLOB NOT NULL
+        );"
+    )?;
+
     Ok(())
 }
 
@@ -383,6 +395,11 @@ pub(crate) mod test_helpers {
                 value TEXT
             );
             INSERT INTO meta(key, value) VALUES ('schema_version', '0.4.0');
+            
+            CREATE TABLE symbol_embeddings (
+                symbol_id INTEGER PRIMARY KEY REFERENCES symbols(id) ON DELETE CASCADE,
+                vector BLOB NOT NULL
+            );
             ",
         ).expect("test schema");
 

@@ -13,6 +13,11 @@ serde      = { workspace = true }
 serde_json = { workspace = true }
 thiserror  = { workspace = true }
 tracing    = { workspace = true }
+ort        = { workspace = true, optional = true }
+tokenizers = { workspace = true, optional = true }
+
+[features]
+embedding = ["dep:ort", "dep:tokenizers"]
 
 [dev-dependencies]
 tempfile = { workspace = true }

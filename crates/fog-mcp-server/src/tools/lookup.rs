@@ -36,13 +36,39 @@ pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> To
 
     let stale_warn = crate::stale::quick_check(project_root, "fog_lookup");
 
-    match db.search(query, limit, kind) {
-        Ok(results) => {
+    match db.search(query, 100, kind) {
+        Ok(mut results) => {
             if results.is_empty() {
                 return ToolCallResult::ok(format!(
                     "{stale_warn}No symbols found for '{query}'. Try fog_outline to browse files."
                 ));
             }
+
+            #[cfg(feature = "embedding")]
+            {
+                if let Some(_model) = crate::semantic::get_model() {
+                    if let Ok(query_vector) = crate::semantic::embed_text(query) {
+                        let ids: Vec<i64> = results.iter().map(|r| r.id).collect();
+                        if let Ok(embeddings) = db.fetch_symbol_embeddings(&ids) {
+                            let mut embed_map = std::collections::HashMap::new();
+                            for (id, vector) in embeddings {
+                                embed_map.insert(id, vector);
+                            }
+                            
+                            for hit in &mut results {
+                                if let Some(vector) = embed_map.get(&hit.id) {
+                                    let similarity = crate::semantic::cosine_similarity(&query_vector, vector);
+                                    hit.relevance = (hit.relevance * 0.6) + (similarity as f64 * 0.4);
+                                }
+                            }
+                            results.sort_by(|a, b| b.relevance.partial_cmp(&a.relevance).unwrap_or(std::cmp::Ordering::Equal));
+                        }
+                    }
+                }
+            }
+
+            results.truncate(limit);
+
             let mut lines = vec![format!("{stale_warn}# fog_lookup: '{query}' ({} results)\n", results.len())];
             for r in &results {
                 lines.push(format!(

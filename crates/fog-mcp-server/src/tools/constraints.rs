@@ -162,6 +162,7 @@ pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> To
 }
 
 /// Read custom adr_paths from .fog.yml if present.
+#[allow(dead_code)]
 fn read_fog_yml_adr_paths(project_root: &std::path::Path) -> Vec<String> {
     let yml_path = project_root.join(".fog.yml");
     let content = match std::fs::read_to_string(&yml_path) {

@@ -1,6 +1,6 @@
 # fog-context — Agentic Codebase Intelligence Engine
 
-> **v0.6.5** | Zero runtime dependency | <5ms cold start | 14 MCP Tools | Rust
+> **v0.8.0** | Zero runtime dependency | <5ms cold start | Semantic Search | Rust
 
 fog-context is a **dual-mode binary** (MCP server + CLI) that serves as the memory backbone for AI agents working on large codebases. It builds a persistent 5-layer knowledge graph and integrates with Cursor, Cline, Claude Desktop, and Zed.
 
@@ -18,7 +18,7 @@ fog-context is a **dual-mode binary** (MCP server + CLI) that serves as the memo
    }
    ```
 3. Open any project and tell your AI: **"Use fog_scan to index this project."**
-4. For first-time setups, tell your AI: **"Populate the knowledge layers using fog_assign, fog_constraints, and fog_decisions. Use a mid-tier model if needed."**
+4. For first-time setups, tell your AI: **"Populate the knowledge layers using fog_assign, fog_constraints, and fog_decisions. Read in multiple passes until no new items are found. Use a mid-tier model if needed."**
 
 ---
 
@@ -53,6 +53,10 @@ curl -L https://github.com/luciusvo/fog-context/releases/latest/download/fog-mcp
   -o ~/.fog/bin/fog-mcp-server && chmod +x ~/.fog/bin/fog-mcp-server
 ```
 
+> 🧠 **Advanced: Semantic Search Dual-Build**
+> For high-accuracy semantic search via local ONNX embeddings, download the `-embed` variants instead (e.g., `fog-mcp-linux-amd64-embed`). 
+> You must also place the 23MB quantized INT8 model `all-MiniLM-L6-v2-q8.onnx` into `~/.fog/models/`.
+
 **Windows:** Download `fog-mcp-windows-amd64.exe` from [GitHub Releases](https://github.com/luciusvo/fog-context/releases) and place it at `%USERPROFILE%\.fog\bin\`.
 
 **Verify the binary works:**
@@ -61,7 +65,7 @@ ls -la ~/.fog/bin/fog-mcp-server
 # Expected: -rwxr-xr-x ... fog-mcp-server
 
 ~/.fog/bin/fog-mcp-server stats --project /tmp 2>&1 | head -3
-# Expected: "fog-context v0.6.x - Stats for: /tmp"
+# Expected: "fog-context v0.8.x - Stats for: /tmp"
 ```
 
 After install, your fog home directory looks like:
@@ -83,7 +87,7 @@ After install, your fog home directory looks like:
 
 ### Step 2: Configure your AI editor
 
-fog-context v0.6.5 uses **explicit per-call routing via `fog_id`**. There is no global env var.
+fog-context v0.8.0 uses **explicit per-call routing via `fog_id`**. There is no global env var.
 
 #### Scenario A — Multi-project mode (recommended for Antigravity, headless agents)
 

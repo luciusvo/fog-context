@@ -150,8 +150,23 @@ pub fn handle(
                     "  [□□□□□] L4 Causality: 0 Decision Records".to_string()
                 },
                 String::new(),
-                format!("**Projects in registry:** {}", registry.list().len()),
             ];
+
+            #[cfg(feature = "embedding")]
+            {
+                if crate::semantic::get_model().is_some() {
+                    lines.push("## 🔍 Semantic Search: ✅ Active".to_string());
+                } else {
+                    lines.push("## 🔍 Semantic Search: ⚠️ Model not found\n   Place model at: ~/.fog/models/all-MiniLM-L6-v2-q8.onnx (~23MB)\n   Download: fog-context.md#semantic-setup".to_string());
+                }
+            }
+            #[cfg(not(feature = "embedding"))]
+            {
+                lines.push("## 🔍 Semantic Search: ❌ Disabled in this build".to_string());
+            }
+
+            lines.push(String::new());
+            lines.push(format!("**Projects in registry:** {}", registry.list().len()));
 
             // Sprint 3D: mandatory enforcement reminder for empty layers
             if score.total_symbols > 0 {

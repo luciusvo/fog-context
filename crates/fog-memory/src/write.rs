@@ -315,6 +315,32 @@ impl MemoryDb {
         ).map_err(crate::MemoryError::Database)?;
         Ok(conn.last_insert_rowid())
     }
+
+    // ---------------------------------------------------------------------------
+    // insert_symbol_embeddings() - Layer 1 (Semantic)
+    // ---------------------------------------------------------------------------
+
+    /// Insert or update the semantic embedding vector for a given symbol.
+    ///
+    /// The vector is expected to be a `Vec<f32>`. It is stored as a BLOB
+    /// by converting each f32 to its little-endian byte representation.
+    ///
+    /// PATTERN_DECISION: Level 1 (Pure Function with DB side effect)
+    pub fn insert_symbol_embeddings(&self, symbol_id: i64, vector: &[f32]) -> MemoryResult<()> {
+        let conn = self.conn();
+        let bytes: Vec<u8> = vector.iter()
+            .flat_map(|f| f.to_le_bytes())
+            .collect();
+        
+        conn.execute(
+            "INSERT INTO symbol_embeddings (symbol_id, vector)
+             VALUES (?1, ?2)
+             ON CONFLICT(symbol_id) DO UPDATE SET vector = excluded.vector",
+            rusqlite::params![symbol_id, bytes],
+        ).map_err(crate::MemoryError::Database)?;
+        
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -46,6 +46,7 @@ pub struct LangHints {
 }
 
 impl LangHints {
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.macro_expansions.is_empty()
             && self.di_annotations.is_empty()

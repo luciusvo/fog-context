@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version     = "0.6.5"
+version     = "0.8.0"
 edition     = "2021"
 rust-version = "1.75"
 license     = "MIT"
@@ -56,3 +56,8 @@ libc       = "0.2"
 # Testing
 tempfile   = "3"
 insta      = { version = "1", features = ["json"] }
+
+# Embedding (Semantic Search)
+ort        = { version = "=2.0.0-rc.12", default-features = false, features = ["std", "ndarray", "download-binaries", "tls-native"] }
+tokenizers = "0.15"
+ndarray    = "0.17"

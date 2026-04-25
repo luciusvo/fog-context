@@ -16,12 +16,17 @@ kotlin   = []
 swift    = []
 dart     = []
 all-langs = ["kotlin", "swift", "dart"]
+embedding = ["fog-memory/embedding", "dep:ort", "dep:tokenizers", "dep:ndarray"]
 
 [dependencies]
+ort        = { workspace = true, optional = true }
+tokenizers = { workspace = true, optional = true }
+ndarray    = { workspace = true, optional = true }
 fog-memory  = { path = "../fog-memory" }
 fog-types   = { path = "../fog-types" }
 rusqlite    = { workspace = true }
 tokio       = { workspace = true }
+anyhow      = "1.0"
 serde       = { workspace = true }
 serde_json  = { workspace = true }
 thiserror   = { workspace = true }
