@@ -355,7 +355,7 @@ const CPP_DEF_QUERY: &str = r#"
 (class_specifier name: (type_identifier) @name) @def
 (struct_specifier name: (type_identifier) @name) @def
 (enum_specifier name: (type_identifier) @name) @def
-(namespace_definition name: (identifier) @name) @def
+(namespace_definition name: (_) @name) @def
 (function_definition declarator: (function_declarator
     declarator: (destructor_name (identifier) @name))) @def
 "#;

@@ -27,7 +27,7 @@ pub fn definition() -> ToolDef {
     }
 }
 
-pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
+pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> ToolCallResult {
     let path = match args["path"].as_str() {
         Some(p) if !p.is_empty() => p,
         _ => return ToolCallResult::err("fog_outline: 'path' is required"),
@@ -54,6 +54,12 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
     let max_symbols = args["max_symbols"].as_u64().unwrap_or(100) as usize;
     let include_docs = args["include_docs"].as_bool().unwrap_or(false);
 
+    let last_indexed = crate::registry::Registry::load()
+        .find(&project_root.to_string_lossy())
+        .and_then(|e| e.last_indexed.clone());
+    let stale_status = crate::stale::check_stale(project_root, "*", last_indexed.as_deref());
+    let stale_warn = crate::stale::format_warning(&stale_status, "fog_outline").unwrap_or_default();
+
     // Query symbols by file path prefix from the symbols+files tables
     match db.skeleton(path, max_symbols, kind_filter, include_docs) {
         Ok(symbols) => {
@@ -62,7 +68,7 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
                 match db.skeleton_fuzzy(path, max_symbols, kind_filter, include_docs) {
                     Ok(fuzzy_hits) if !fuzzy_hits.is_empty() => {
                         let mut lines = vec![format!(
-                            "# fog_outline: `{path}` (fuzzy match — {} symbols)\n\
+                            "{stale_warn}# fog_outline: `{path}` (fuzzy match — {} symbols)\n\
                              > Path matched via suffix/partial search. Exact path not found.\n",
                             fuzzy_hits.len()
                         )];
@@ -84,7 +90,7 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
                     _ => {}
                 }
                 return ToolCallResult::ok(format!(
-                    "No symbols found in '{path}'.\n\
+                    "{stale_warn}No symbols found in '{path}'.\n\
                      Check that:\n\
                      1. The path is correct (relative to project root)\n\
                      2. The project is indexed - run fog_scan if unsure\n\
@@ -93,7 +99,7 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
                 ));
             }
 
-            let mut lines = vec![format!("# fog_outline: `{path}` ({} symbols)\n", symbols.len())];
+            let mut lines = vec![format!("{stale_warn}# fog_outline: `{path}` ({} symbols)\n", symbols.len())];
             for s in &symbols {
                 let doc = if include_docs {
                     s.doc_snippet.as_ref()

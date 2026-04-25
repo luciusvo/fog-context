@@ -46,6 +46,7 @@ pub fn dispatch(
     db: &Arc<Mutex<MemoryDb>>,
     project_root: &Path,
     registry: &Registry,
+    session_stats: Option<(u64, u64)>,
 ) -> ToolCallResult {
     // Tools that only need the registry (no DB)
     match tool_name {
@@ -63,14 +64,14 @@ pub fn dispatch(
         "fog_scan"    => tools::scan::handle(args, &db_guard, project_root),
         "fog_import"  => tools::import::handle(args, &db_guard, project_root),
 
-        "fog_brief"       => tools::brief::handle(args, &db_guard, registry, project_root),
-        "fog_lookup"      => tools::lookup::handle(args, &db_guard),
-        "fog_outline"     => tools::outline::handle(args, &db_guard),
+        "fog_brief"       => tools::brief::handle(args, &db_guard, registry, project_root, session_stats),
+        "fog_lookup"      => tools::lookup::handle(args, &db_guard, project_root),
+        "fog_outline"     => tools::outline::handle(args, &db_guard, project_root),
         "fog_inspect"     => tools::inspect::handle(args, &db_guard, project_root),
         "fog_impact"      => tools::impact::handle(args, &db_guard, project_root),
-        "fog_trace"       => tools::trace::handle(args, &db_guard),
-        "fog_gaps"            => tools::gaps::handle(args, &db_guard),
-        "fog_domains"         => tools::domains::handle(args, &db_guard),
+        "fog_trace"       => tools::trace::handle(args, &db_guard, project_root),
+        "fog_gaps"            => tools::gaps::handle(args, &db_guard, project_root),
+        "fog_domains"         => tools::domains::handle(args, &db_guard, project_root),
         "fog_assign"          => tools::assign::handle(args, &db_guard),
         "fog_constraints"     => tools::constraints::handle(args, &db_guard, project_root),
         "fog_decisions"       => tools::decisions::handle(args, &db_guard, project_root),

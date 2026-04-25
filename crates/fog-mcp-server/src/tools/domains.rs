@@ -23,14 +23,20 @@ pub fn definition() -> ToolDef {
     }
 }
 
-pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
+pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> ToolCallResult {
+    let last_indexed = crate::registry::Registry::load()
+        .find(&project_root.to_string_lossy())
+        .and_then(|e| e.last_indexed.clone());
+    let stale_status = crate::stale::check_stale(project_root, "*", last_indexed.as_deref());
+    let stale_warn = crate::stale::format_warning(&stale_status, "fog_domains").unwrap_or_default();
+
     if let Some(domain) = args["domain"].as_str() {
         match db.query_domain(domain) {
             Ok(None) => ToolCallResult::ok(format!(
-                "Domain '{domain}' not found. Call fog_domains (no args) to see all domains."
+                "{stale_warn}Domain '{domain}' not found. Call fog_domains (no args) to see all domains."
             )),
             Ok(Some(info)) => {
-                let mut lines = vec![format!("# Domain: {}\n", info.name)];
+                let mut lines = vec![format!("{stale_warn}# Domain: {}\n", info.name)];
                 if let Some(kw) = &info.keywords {
                     lines.push(format!("**Keywords:** {kw}"));
                 }
@@ -60,11 +66,11 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
         match db.domain_catalog() {
             Ok(domains) => {
                 if domains.is_empty() {
-                    return ToolCallResult::ok(
-                        "No business domains defined yet. Use fog_assign to tag symbols to domains."
-                    );
+                    return ToolCallResult::ok(format!(
+                        "{stale_warn}No business domains defined yet. Use fog_assign to tag symbols to domains."
+                    ));
                 }
-                let mut lines = vec![format!("# Business Domains ({} total)\n", domains.len())];
+                let mut lines = vec![format!("{stale_warn}# Business Domains ({} total)\n", domains.len())];
                 for d in &domains {
                     lines.push(format!("## {}\n**Keywords:** {}\n**Symbols:** {} | **Constraints:** {}",
                         d.name,

@@ -63,6 +63,8 @@ struct DbPool {
     default_root: Option<PathBuf>,
     /// Maximum number of simultaneously open connections.
     max_open: usize,
+    /// Call counts per project for telemetry
+    call_counts: std::collections::HashMap<PathBuf, u64>,
 }
 
 /// Close connections idle longer than this duration.
@@ -72,11 +74,12 @@ impl DbPool {
     fn new(default_root: Option<PathBuf>, default_db: Option<Arc<Mutex<MemoryDb>>>) -> Self {
         let mut pools = std::collections::HashMap::new();
         let mut lru = std::collections::VecDeque::new();
+        let call_counts = std::collections::HashMap::new();
         if let (Some(ref root), Some(db)) = (&default_root, default_db) {
             pools.insert(root.clone(), (db, std::time::Instant::now()));
             lru.push_back(root.clone());
         }
-        Self { pools, lru, default_root, max_open: 4 }
+        Self { pools, lru, default_root, max_open: 4, call_counts }
     }
 
     /// Record access for LRU tracking.
@@ -157,6 +160,14 @@ impl DbPool {
 
     fn default_root(&self) -> Option<&Path> {
         self.default_root.as_deref()
+    }
+
+    pub fn call_count(&self, root: &Path) -> u64 {
+        self.call_counts.get(root).copied().unwrap_or(0)
+    }
+
+    pub fn total_call_count(&self) -> u64 {
+        self.call_counts.values().sum()
     }
 }
 
@@ -331,7 +342,10 @@ fn handle_tools_call(
         }
     };
 
-    let result = router::dispatch(tool_name, args, &effective_db, &effective_root, &registry);
+    *pool.call_counts.entry(effective_root.clone()).or_insert(0) += 1;
+    let session_stats = Some((pool.call_count(&effective_root), pool.total_call_count()));
+
+    let result = router::dispatch(tool_name, args, &effective_db, &effective_root, &registry, session_stats);
 
     // A4: After fog_scan, evict the write-heavy connection so the next query
     // gets a fresh reader. Prevents query-tools from blocking on scan's WAL.
@@ -511,7 +525,7 @@ async fn main() {
             let fmt = format.clone();
             let fake_args = serde_json::json!({ "format": fmt });
             let reg = Registry::load();
-            let result = tools::brief::handle(&fake_args, &db, &reg, &project_root);
+            let result = tools::brief::handle(&fake_args, &db, &reg, &project_root, None);
             let text = result.content.first().map(|c| c.text.as_str()).unwrap_or("{}");
             println!("{text}");
             return;

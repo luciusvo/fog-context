@@ -36,6 +36,7 @@ pub fn handle(
     db: &MemoryDb,
     registry: &crate::registry::Registry,
     project_root: &Path,
+    session_stats: Option<(u64, u64)>,
 ) -> ToolCallResult {
     match db.knowledge_score() {
         Ok(score) => {
@@ -218,7 +219,11 @@ pub fn handle(
                 }
             }
 
-
+            if let Some((project_calls, total_calls)) = session_stats {
+                lines.push("\n## 📈 Session Stats".to_string());
+                lines.push(format!("- Tools invoked (this project): **{}**", project_calls));
+                lines.push(format!("- Tools invoked (global pool):  **{}**", total_calls));
+            }
 
             ToolCallResult::ok(format!("{}{unindexed_advisory}", lines.join("\n")))
         }

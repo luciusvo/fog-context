@@ -129,9 +129,12 @@ pub fn format_warning(status: &StaleStatus, tool_name: &str) -> Option<String> {
     match status {
         StaleStatus::Stale { files } => Some(format!(
             "> [!WARNING]\n\
-             > **Stale graph detected** — the following file(s) changed since last `fog_scan`:\n\
+             > **Stale graph detected** — {} file(s) changed since last `fog_scan`:\n\
              {}\n\
-             > `{tool_name}` results may be outdated. Run `fog_scan({{}})` for fresh data.\n\n",
+             > `{tool_name}` results may be outdated.\n\
+             > → Run `fog_scan({{ \"project\": \"<fog_id>\" }})` to refresh.\n\
+             > → Ideal trigger: after `git commit` or major code changes.\n\n",
+            files.len(),
             files.iter().map(|f| format!("> - `{f}`")).collect::<Vec<_>>().join("\n")
         )),
         _ => None,

@@ -31,7 +31,7 @@ pub fn definition() -> ToolDef {
     }
 }
 
-pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
+pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> ToolCallResult {
     let template = match args["template"].as_str() {
         Some(t) => t,
         None => return ToolCallResult::err("fog_gaps: 'template' is required"),
@@ -52,9 +52,15 @@ pub fn handle(args: &Value, db: &MemoryDb) -> ToolCallResult {
         Err(e) => return ToolCallResult::err(format!("fog_gaps: DB open error: {e}")),
     };
 
+    let last_indexed = crate::registry::Registry::load()
+        .find(&project_root.to_string_lossy())
+        .and_then(|e| e.last_indexed.clone());
+    let stale_status = crate::stale::check_stale(project_root, "*", last_indexed.as_deref());
+    let stale_warn = crate::stale::format_warning(&stale_status, "fog_gaps").unwrap_or_default();
+
     match run_template(&conn, template, params) {
         Ok(results) => {
-            let mut lines = vec![format!("# fog_gaps: {template}\n")];
+            let mut lines = vec![format!("{stale_warn}# fog_gaps: {template}\n")];
             if results.is_empty() {
                 lines.push(format!("✅ No issues found for '{template}' - graph looks clean."));
             } else {
