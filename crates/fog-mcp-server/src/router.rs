@@ -17,7 +17,7 @@ use crate::protocol::{ToolCallResult, ToolDef};
 use crate::registry::Registry;
 use crate::tools;
 
-/// Generate the list of all 14 tools for `tools/list`.
+/// Generate the list of all 15 tools for `tools/list`.
 pub fn list_tools() -> Vec<ToolDef> {
     vec![
         // ── Core (8) ────────────────────────────────────────────────────────────

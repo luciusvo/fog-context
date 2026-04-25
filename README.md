@@ -312,7 +312,7 @@ fog_decisions({ "functions": ["key_fn"], "reason": "why it works this way" })
 # Export knowledge snapshot (xml | md | json)
 ~/.fog/bin/fog-mcp-server --project /path/to/project export --format xml
 
-# List all 14 available MCP tools
+# List all 15 available MCP tools
 ~/.fog/bin/fog-mcp-server --list-tools
 ```
 
@@ -333,7 +333,7 @@ Every AI agent session **must** follow this order:
 4. fog_decisions({...})    → Record WHY after every significant change
 ```
 
-### 14 MCP Tools
+### 15 MCP Tools
 
 | Tool | Purpose | Priority |
 |:---|:---|:---|
@@ -345,6 +345,7 @@ Every AI agent session **must** follow this order:
 | `fog_impact` | Blast radius analysis before any edit | 🔴 Mandatory |
 | `fog_trace` | Full call tree downstream or upstream | Core |
 | `fog_roots` | List all indexed projects in `~/.fog/registry.json` | Core |
+| `fog_search` | Raw text & regex search across files — use when `fog_lookup` can't find exact strings | Core |
 | `fog_gaps` | Find orphans, cycles, dead code | Advanced |
 | `fog_domains` | Query business domains and their symbols | Advanced |
 | `fog_assign` | Define/update a business domain | Advanced |
@@ -362,6 +363,7 @@ Every AI agent session **must** follow this order:
 | `fog_inspect` | `name` (string) | `fog_inspect({ "name": "verify_token" })` |
 | `fog_impact` | `target` (string) | `fog_impact({ "target": "verify_token" })` |
 | `fog_trace` | `entry` (string) | `fog_trace({ "entry": "main", "direction": "down" })` |
+| `fog_search` | `query` (string) | `fog_search({ "query": "TODO", "context_lines": 3 })` |
 | `fog_gaps` | `template` (string) | `fog_gaps({ "template": "find_orphans" })` |
 | `fog_decisions` | `functions` (array), `reason` (string) | `fog_decisions({ "functions": ["fn_a"], "reason": "..." })` |
 
@@ -409,6 +411,9 @@ cp target/release/fog-mcp-server ~/.fog/bin/fog-mcp-server
 
 # With mobile language support (Kotlin/Swift/Dart - requires native C toolchain)
 cargo build --release --package fog-mcp-server --features all-langs
+
+# With Semantic Search (ONNX embedding - requires model file at ~/.fog/models/)
+cargo build --release --package fog-mcp-server --features "all-langs,embedding"
 ```
 
 > **macOS Intel users:** No pre-built binary is provided. Build locally (~2 min with Rust installed).

@@ -7,6 +7,61 @@ Format: [Semantic Versioning](https://semver.org). Entries grouped by type:
 
 ---
 
+## [0.8.0] - 2026-04-26
+
+Major feature release: Semantic Search dual-build, raw text search, and cross-language AST bridge hardening.
+
+### Added
+
+- **`fog_search` (Tool #15)** — Raw text and regex search across all project files. Key features:
+  - Context lines (`context_lines: 0–10`) — returns N lines above/below each match, reducing follow-up `view_file` calls
+  - Distribution summary — when results exceed 50, groups matches by directory instead of flooding context window
+  - File size guard — skips files >1MB and minified bundles (`.min.js`, `.min.css`, `.map`, `.svg`)
+  - Path sandbox — `canonicalize` + `starts_with(project_root)` prevents path traversal attacks
+  - Extension filter — `includes: ["*.rs", "*.ts"]` support via `ignore::OverrideBuilder`
+  - `.gitignore` + `.fogignore` aware — reuses existing walker configuration
+  - Stateless — no DB required, reads file system directly at query time (always fresh, pre-scan not needed)
+
+- **Semantic Search Dual-Build (`--features embedding`)** — Feature-flagged ONNX embedding pipeline:
+  - Hybrid re-ranking: `0.6 × BM25 + 0.4 × cosine_similarity` in `fog_lookup`
+  - Lazy model loading via `OnceLock<Option<SemanticModel>>` — preserves `<5ms` cold start guardrail
+  - Raw inference stack: `ort 2.0.0-rc.12` + `tokenizers 0.15` + `ndarray 0.17` (no auto-download)
+  - Mean pooling + L2 normalization for `all-MiniLM-L6-v2-q8.onnx`
+  - Incremental embedding via `phase_embed` — only embeds symbols not yet in `symbol_embeddings` table
+  - Graceful fallback to BM25-only if model file missing
+
+- **`symbol_embeddings` DB table** — `CREATE TABLE IF NOT EXISTS` (backward-compatible; non-embed builds read DB without error)
+
+- **`fog_brief` semantic status indicator** — `🔍 Semantic Search: ✅ Active / ⚠️ Model not found / ❌ Disabled` depending on build and model presence
+
+- **CI/CD embed binary variants** — Release matrix now produces 6 standard + 3 embed targets:
+  - `fog-mcp-linux-amd64-embed`, `fog-mcp-macos-arm64-embed`, `fog-mcp-windows-amd64-embed.exe`
+
+- **ADR 003** (`logs/decisions/003-semantic-search.md`) — Architectural Decision Record for dual-build strategy
+
+- **Ruby DSL macro bridge** — `[(call) (command_call)]` captures both `has_many(:posts)` and `has_many :posts` patterns
+
+- **Go struct embedding filter** — Excludes type assertion (`x.(Interface)`) from call graph to prevent false-positive edges
+
+- **`fog_scan` Knowledge Layer bootstrap hint** — When L2/L3/L4 are empty, output includes multi-pass population prompt with mid-tier model cost advice
+
+- **`AGENTS.md` `[!WARNING]` banner** — Auto-generated section now prominently warns AI agents not to run `fog_*` commands via bash/shell
+
+### Changed
+
+- **`fog_lookup` scoring** — Fixed hybrid weight from `BM25 × 0.1 + cosine` → `BM25 × 0.6 + cosine × 0.4` (aligns with spec)
+- **`fog_scan` large-repo routing** — MCP returns advisory to use CLI when estimated file count > 1000
+- **README** — Updated to 15 MCP tools; added `fog_search` to tool table and argument reference; added embed build-from-source command
+- **tools/mod.rs** — Updated tool count comment from 14 → 15
+
+### Fixed
+
+- **Embedding build blocker** — Replaced `fastembed 3.x` (which pulled `ort-sys 2.0.0-rc.12` with missing C-FFI `size_t`) with direct `ort` + `tokenizers` + `ndarray` stack. Embedding build now compiles with 0 errors.
+- **`is_test_path` dead code warning** — Added `#[allow(dead_code)]`
+- **`elapsed_ms` overflow warning** — Fixed cast in scan timing
+
+---
+
 ## [0.6.5] - 2026-04-20
 
 Stability hardening for multi-agent workflows. Fixes critical chicken-and-egg
