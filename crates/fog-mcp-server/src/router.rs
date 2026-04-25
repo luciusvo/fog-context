@@ -29,6 +29,7 @@ pub fn list_tools() -> Vec<ToolDef> {
         tools::inspect::definition(),
         tools::impact::definition(),
         tools::trace::definition(),
+        tools::search::definition(),
         // ── Advanced (6) ────────────────────────────────────────────────────────
         tools::gaps::definition(),
         tools::domains::definition(),
@@ -67,6 +68,7 @@ pub fn dispatch(
         "fog_brief"       => tools::brief::handle(args, &db_guard, registry, project_root, session_stats),
         "fog_lookup"      => tools::lookup::handle(args, &db_guard, project_root),
         "fog_outline"     => tools::outline::handle(args, &db_guard, project_root),
+        "fog_search"      => tools::search::handle(args, project_root),
         "fog_inspect"     => tools::inspect::handle(args, &db_guard, project_root),
         "fog_impact"      => tools::impact::handle(args, &db_guard, project_root),
         "fog_trace"       => tools::trace::handle(args, &db_guard, project_root),

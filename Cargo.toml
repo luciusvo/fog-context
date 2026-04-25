@@ -61,3 +61,6 @@ insta      = { version = "1", features = ["json"] }
 ort        = { version = "=2.0.0-rc.12", default-features = false, features = ["std", "ndarray", "download-binaries", "tls-native"] }
 tokenizers = "0.15"
 ndarray    = "0.17"
+
+# Text Search
+regex      = "1.12.3"

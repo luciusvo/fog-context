@@ -28,6 +28,7 @@ rusqlite    = { workspace = true }
 tokio       = { workspace = true }
 anyhow      = "1.0"
 serde       = { workspace = true }
+regex       = { workspace = true }
 serde_json  = { workspace = true }
 thiserror   = { workspace = true }
 tracing     = { workspace = true }

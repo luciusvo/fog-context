@@ -36,3 +36,4 @@ pub mod roots;
 pub mod scan;
 pub mod trace;
 pub mod constraints;
+pub mod search;

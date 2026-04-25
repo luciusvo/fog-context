@@ -454,6 +454,7 @@ dependencies = [
  "libc",
  "ndarray",
  "ort",
+ "regex",
  "rusqlite",
  "serde",
  "serde_json",
