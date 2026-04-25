@@ -1,6 +1,6 @@
 <!-- fog-context -->
 ## fog-context MCP - Agent Instructions
-> Auto-generated 2026-04-20T21:18:23Z | 123 files · 810 symbols · indexed in 117945ms
+> Auto-generated 2026-04-25T06:51:43Z | 123 files · 177 symbols · indexed in 427ms
 
 ### MANDATORY: Start every session
 
@@ -43,29 +43,4 @@ Prefer CLI for initial index (shows progress, no MCP timeout):
 fog-mcp-server index --project /path/to/project
 ```
 Then use MCP tools for all queries.
-### 🔴 First-time Setup - MANDATORY Knowledge Layer Bootstrap
-> fog-context auto-indexed Layer 1 (Physical: 810 symbols). Semantic Layers 2-4 are currently empty.
-> Complete these steps **once** to unlock full intelligence:
-
-```
-Step 1 - Layer 2 (Business Domains): Map Semantic Synonyms to Exact Code
-fog_assign({ domain: "Notification", keywords: ["mail", "sms"], symbols: ["NotificationDispatcher"] })
-fog_assign({ domain: "DataAccess",   keywords: ["sql", "db"],   symbols: ["db_query"] })
-
-Step 2 - Layer 3 (Constraints): Ingest architecture rules from ADR files
-fog_constraints({})          ← scans logs/decisions/, docs/adr/, docs/decisions/
-
-Step 3 - Layer 4 (Decisions): Record WHY key design decisions were made
-fog_decisions({ functions: ["key_fn"], reason: "...", revert_risk: "LOW" })
-```
-
-### 🔴 MANDATORY: After Every Significant Change
-You must invoke the **MCP Tool** `fog_decisions` to record your architecture choices:
-```
-// Call the MCP tool explicitly (DO NOT try to run this as a bash command):
-fog_decisions({ functions: ["changed_fn"], reason: "WHY it changed", revert_risk: "LOW|MEDIUM|HIGH" })
-```
-> Completing a task without using the `fog_decisions` MCP tool = **KNOWLEDGE GAP VIOLATION**.
-> Context Maturity visualization will update as you populate Layers 2-4.
-
 <!-- /fog-context -->

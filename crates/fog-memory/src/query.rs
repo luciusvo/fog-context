@@ -156,10 +156,13 @@ impl MemoryDb {
         if let Ok(mut stmt) = conn.prepare("SELECT keywords FROM domains WHERE name = ?1 OR keywords LIKE ?2 LIMIT 1") {
             let like_query = format!("%{}%", clean_query);
             if let Ok(kws) = stmt.query_row(rusqlite::params![clean_query, like_query], |row| row.get::<_, String>(0)) {
+                let mut added = 0;
                 for kw in kws.split(',') {
+                    if added >= 5 { break; } // Cap at 5 synonyms
                     let kw = kw.trim();
                     if !kw.is_empty() && kw != clean_query {
                         fts_terms.push(format!("{}*", kw));
+                        added += 1;
                     }
                 }
             }

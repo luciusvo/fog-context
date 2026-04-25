@@ -131,7 +131,26 @@ impl MemoryDb {
     pub fn define_domain(&self, args: DefineDomainArgs) -> MemoryResult<()> {
         let conn = self.conn();
 
-        let mut combined_keywords = args.keywords.clone().unwrap_or_default();
+        let existing_keywords: String = conn.query_row(
+            "SELECT keywords FROM domains WHERE name = ?1",
+            rusqlite::params![args.name],
+            |row| row.get(0),
+        ).unwrap_or_default();
+        
+        let mut combined_keywords: Vec<String> = existing_keywords
+            .split(',')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .collect();
+
+        if let Some(keywords) = &args.keywords {
+            for kw in keywords {
+                if !combined_keywords.contains(kw) {
+                    combined_keywords.push(kw.clone());
+                }
+            }
+        }
+
         if let Some(aliases) = &args.aliases {
             for alias in aliases {
                 if !combined_keywords.contains(alias) {
@@ -364,6 +383,7 @@ mod tests {
         db.define_domain(DefineDomainArgs {
             name: "Authentication".to_string(),
             keywords: Some(vec!["auth".to_string(), "jwt".to_string()]),
+            aliases: None,
             symbols: Some(vec!["verify_token".to_string()]),
             constraints: None,
         }).unwrap();

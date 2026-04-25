@@ -547,7 +547,9 @@ const CS_BRIDGE_QUERY: &str = r#"
   (variable_declaration type: (identifier) @name))
 "#;
 
-// Ruby: has_many, belongs_to, validates
+// Ruby: has_many, belongs_to, inject
+// Note: In newer tree-sitter-ruby versions, both `has_many :posts` and `has_many(:posts)`
+// are parsed identically as `call` nodes. The `command_call` node type no longer exists.
 const RUBY_BRIDGE_QUERY: &str = r#"
 (call
   method: (identifier) @_ann

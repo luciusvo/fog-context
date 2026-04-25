@@ -27,9 +27,7 @@ serde_json  = { workspace = true }
 thiserror   = { workspace = true }
 tracing     = { workspace = true }
 chrono      = { version = "0.4", default-features = false, features = ["clock", "std"] }
-
-# Tree-sitter languages (12 native)
-tree-sitter             = { workspace = true }
+tree-sitter.workspace = true
 tree-sitter-rust        = { workspace = true }
 tree-sitter-typescript  = { workspace = true }
 tree-sitter-python      = { workspace = true }
@@ -38,7 +36,7 @@ tree-sitter-c           = { workspace = true }
 tree-sitter-cpp         = { workspace = true }
 tree-sitter-java        = { workspace = true }
 tree-sitter-c-sharp     = { workspace = true }
-tree-sitter-ruby        = { workspace = true }
+tree-sitter-ruby.workspace = true
 tree-sitter-php         = { workspace = true }
 tree-sitter-lua         = { workspace = true }
 tree-sitter-language    = "0.1.7"
