@@ -82,14 +82,15 @@ $ fog_impact({ "target": "verify_token" })
 
 To set up fog-context for this project, simply copy and paste this prompt to your AI:
 
-> "Set up fog-context for this project. Guide: https://github.com/luciusvo/fog-context#-initial-setup"
+> "Set up fog-context for this project. Before downloading the binary, ask me if I want the Normal version (fast, lightweight) or the Embedded version (includes semantic search). Guide: https://github.com/luciusvo/fog-context#-initial-setup"
 
 ---
 
 ## ⚡ Quick Start (Manual Setup)
 
-1. Install the binary to `~/.fog/bin/fog-mcp-server` (see [Initial Setup](#-initial-setup))
-2. Add to your AI Editor's MCP config:
+1. **Choose your version**: Normal (fast, zero deps) or Embedded (includes semantic search).
+2. Install the chosen binary to `~/.fog/bin/fog-mcp-server` (see [Initial Setup](#-initial-setup))
+3. Add to your AI Editor's MCP config:
    ```json
    {
      "mcpServers": {
@@ -97,8 +98,8 @@ To set up fog-context for this project, simply copy and paste this prompt to you
      }
    }
    ```
-3. Open any project and tell your AI: **"Use fog_scan to index this project."**
-4. For first-time setups, tell your AI: **"Populate the knowledge layers using fog_assign, fog_constraints, and fog_decisions. (Optional) Run multiple passes to discover deeper context. Strongly Recommended: Switch to a low or mid-tier model (like Gemini Flash or Claude Haiku) to save costs during this intensive process."**
+4. Open any project and tell your AI: **"Use fog_scan to index this project."**
+5. For first-time setups, tell your AI: **"Populate the knowledge layers using fog_assign, fog_constraints, and fog_decisions. (Optional) Run multiple passes to discover deeper context. Strongly Recommended: Switch to a low or mid-tier model (like Gemini Flash or Claude Haiku) to save costs during this intensive process."**
 ---
 
 ## 📋 Overview
@@ -118,7 +119,14 @@ To set up fog-context for this project, simply copy and paste this prompt to you
 ### Step 1: Download the binary
 
 fog-context uses a **single universal binary** at `~/.fog/bin/fog-mcp-server` shared across all your repos.
+Before downloading, **you must choose between two variants**:
 
+1. **Normal Version (Recommended)**: Faster, zero dependencies, <5ms cold start. (Filenames: `fog-mcp-linux-amd64`, etc.)
+2. **Embedded Version**: Includes ONNX Semantic Search capabilities (`fog_search`). Requires downloading a 23MB ONNX model. (Filenames end with `-embed`, e.g., `fog-mcp-linux-amd64-embed`).
+
+> 🤖 **For AI Agents:** You MUST explicitly ask the user whether they want the Normal or Embedded version before running any curl commands.
+
+#### Option A: Normal Version Download
 ```bash
 # Create the fog home directory
 mkdir -p ~/.fog/bin
@@ -132,13 +140,27 @@ curl -L https://github.com/luciusvo/fog-context/releases/latest/download/fog-mcp
   -o ~/.fog/bin/fog-mcp-server && chmod +x ~/.fog/bin/fog-mcp-server
 ```
 
-> 🧠 **Advanced: Semantic Search Dual-Build**
-> **For AI Agents:** When setting up fog-context for a user, explicitly ask if they want Semantic Search capabilities (`fog_search`).
-> - If **No** -> default to standard binaries (faster, zero dependencies).
-> - If **Yes** -> instruct them to download the `-embed` variants instead (e.g., `fog-mcp-linux-amd64-embed`).
->   You must also instruct the user to place the 23MB quantized INT8 model `all-MiniLM-L6-v2-q8.onnx` into `~/.fog/models/`.
+#### Option B: Embedded Version Download
+If you chose the Embedded version, use the `-embed` binaries and download the required ONNX model:
+```bash
+# Create the fog directories
+mkdir -p ~/.fog/bin
+mkdir -p ~/.fog/models
 
-**Windows:** Download `fog-mcp-windows-amd64.exe` (or `-embed.exe`) from [GitHub Releases](https://github.com/luciusvo/fog-context/releases) and place it at `%USERPROFILE%\.fog\bin\`.
+# Linux (x86_64)
+curl -L https://github.com/luciusvo/fog-context/releases/latest/download/fog-mcp-linux-amd64-embed \
+  -o ~/.fog/bin/fog-mcp-server && chmod +x ~/.fog/bin/fog-mcp-server
+
+# macOS Apple Silicon
+curl -L https://github.com/luciusvo/fog-context/releases/latest/download/fog-mcp-macos-arm64-embed \
+  -o ~/.fog/bin/fog-mcp-server && chmod +x ~/.fog/bin/fog-mcp-server
+
+# Download the ONNX model (Mandatory for Semantic Search)
+curl -L https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/onnx/model_quantized.onnx \
+  -o ~/.fog/models/all-MiniLM-L6-v2-q8.onnx
+```
+
+**Windows:** Download `fog-mcp-windows-amd64.exe` (or `-embed.exe`) from [GitHub Releases](https://github.com/luciusvo/fog-context/releases) and place it at `%USERPROFILE%\.fog\bin\fog-mcp-server.exe`. If using Embedded, place the `.onnx` model in `%USERPROFILE%\.fog\models\`.
 
 **Verify the binary works:**
 ```bash
