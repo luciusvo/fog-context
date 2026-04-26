@@ -1,8 +1,80 @@
-# fog-context - Agentic Codebase Intelligence Engine
+<div align="center">
 
-> **v0.8.0** | Zero runtime dependency | <5ms cold start | Semantic Search | Rust
+# 🌫️ fog-context
 
-fog-context is a **dual-mode binary** (MCP server + CLI) that serves as the memory backbone for AI agents working on large codebases. It builds a persistent 5-layer knowledge graph and integrates with Cursor, Cline, Claude Desktop, and Zed.
+### The Memory Backbone for AI Coding Agents
+
+*Build a persistent, 5-layer knowledge graph of your codebase — then give any AI the context it actually needs.*
+
+[![Version](https://img.shields.io/badge/version-0.8.0-blue?style=flat-square)](https://github.com/luciusvo/fog-context/releases)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![Build](https://img.shields.io/github/actions/workflow/status/luciusvo/fog-context/release.yml?style=flat-square&label=CI)](https://github.com/luciusvo/fog-context/actions)
+[![Rust](https://img.shields.io/badge/built_with-Rust_1.75+-orange?style=flat-square&logo=rust)](https://www.rust-lang.org)
+[![MCP Compatible](https://img.shields.io/badge/MCP-compatible-purple?style=flat-square)](https://modelcontextprotocol.io)
+
+**Works with:** Cursor · Cline · Claude Desktop · Zed · Any MCP-compatible agent
+
+</div>
+
+---
+
+## 🤔 Why fog-context?
+
+| Tool | What it does | The gap |
+|:-----|:-------------|:--------|
+| `grep` / `ripgrep` | Find exact text in files | No understanding of *what the code means* |
+| `ctags` / `LSP` | Jump to definitions | No cross-file causality, no "why" |
+| RAG + embeddings | Semantic search over code | Hallucination-prone, stateless per-query |
+| **fog-context** | **Persistent 5-layer knowledge graph** | **Combines AST precision + semantic search + institutional memory** |
+
+AI agents using fog-context don't just *find* code — they *understand* it: who calls what, what constraints apply, and why it was changed.
+
+---
+
+## ✨ Features
+
+- **⚡ <5ms cold start** — Single static binary, zero runtime dependencies, ~24MB
+- **🧠 5-Layer Knowledge Graph** — Physical (AST) → Business → Constraints → Causality → Session
+- **🔍 Hybrid Search** — BM25 full-text + optional ONNX semantic re-ranking (60/40 blend)
+- **🌐 15 Languages** — Rust, TypeScript, Python, Go, C/C++, Java, C#, Ruby, PHP, Lua + Kotlin/Swift/Dart
+- **🛡️ Blast Radius Analysis** — Know what breaks *before* you change a function
+- **📜 Institutional Memory** — `fog_decisions` records *why* code changed; future AI sessions read it
+- **🗺️ Call Graph Tracing** — Upstream and downstream traversal, cycle detection, dead code finder
+- **🔎 Raw Text Search** — `fog_search` with context lines, regex, and directory distribution summary
+- **🤖 Zero-Config Agent Onboarding** — Auto-generates `AGENTS.md` with session protocol on first scan
+- **🔄 Incremental Indexing** — XXH3 checksums; only re-parses changed files
+
+---
+
+## 🖥️ Demo
+
+```
+$ fog_brief({})
+
+╔══════════════════════════════════════════════════════════╗
+║  fog-context v0.8.0 · my-project · fog_abc123           ║
+╠══════════════════════════════════════════════════════════╣
+║  Symbols  │ 2,847    Files    │ 198                     ║
+║  Domains  │ 8        Decisions│ 34     Constraints │ 12 ║
+║  Knowledge Score: 74/100  ██████████████░░░░░░           ║
+║  Semantic Search: ✅ Active (all-MiniLM-L6-v2-q8)       ║
+╚══════════════════════════════════════════════════════════╝
+
+$ fog_search({ "query": "TODO", "context_lines": 2 })
+
+Found 12 matches:
+
+File: src/auth/login.rs
+   45 |   // validate credentials
+   46 |   let user = db.find_user(email);
+→  47 |   // TODO: add rate limiting here
+   48 |   if user.is_none() { return Err(NotFound); }
+
+$ fog_impact({ "target": "verify_token" })
+
+⚠️  Risk: HIGH  │  12 callers  │  3 Tier-2 modules affected
+   → middleware/auth.rs · api/gateway.rs · tests/auth_test.rs
+```
 
 ---
 
@@ -430,6 +502,49 @@ cargo build --release --package fog-mcp-server --features "all-langs,embedding"
 
 ---
 
+## 🛠️ Tech Stack
+
+| Layer | Technology | Role |
+|:------|:-----------|:-----|
+| Parsing | [Tree-sitter](https://tree-sitter.github.io/) | Language-agnostic AST extraction (15 grammars) |
+| Storage | [SQLite](https://www.sqlite.org/) + FTS5 | Symbol index, call graph, knowledge layers |
+| Search | BM25 (SQLite FTS5) | Fast lexical symbol search |
+| Semantic | [ONNX Runtime](https://onnxruntime.ai/) + `tokenizers` | Optional embedding re-ranking (embed build) |
+| File Walking | [`ignore`](https://crates.io/crates/ignore) | `.gitignore`-aware walker (same engine as ripgrep) |
+| Protocol | [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) | AI agent integration |
+| Language | Rust 1.75+ | Zero-cost, memory-safe, single static binary |
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Here's how to get started:
+
+```bash
+# 1. Fork and clone
+git clone https://github.com/your-fork/fog-context.git
+cd fog-context
+
+# 2. Create a feature branch
+git checkout -b feat/your-feature-name
+
+# 3. Build and test
+cargo test
+cargo check --features embedding   # verify embed build stays clean
+
+# 4. Submit a Pull Request against main
+```
+
+**Good first issues:**
+- Adding a new Tree-sitter language grammar
+- Improving `fog_brief` output formatting
+- Adding test coverage for edge cases in `fog_search`
+- Documentation improvements
+
+Please open an **Issue** before starting large features to align on design.
+
+---
+
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
@@ -438,4 +553,14 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
 
 ## License
 
-MIT - See [LICENSE](LICENSE)
+MIT — See [LICENSE](LICENSE)
+
+---
+
+<div align="center">
+
+Made with ☕ and Rust · Built for the agentic coding era
+
+[GitHub](https://github.com/luciusvo/fog-context) · [Releases](https://github.com/luciusvo/fog-context/releases) · [Issues](https://github.com/luciusvo/fog-context/issues)
+
+</div>
