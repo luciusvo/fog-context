@@ -42,11 +42,11 @@ jobs:
 
           # ── Embedding Variants (Linux/macOS/Windows) ──────────────────────
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
+            target: x86_64-unknown-linux-gnu
             file_name: fog-mcp-linux-amd64-embed
-            musl: true
+            musl: false
             embed: true
-            cross: true
+            cross: false
 
           - os: macos-latest
             target: aarch64-apple-darwin
@@ -151,12 +151,12 @@ jobs:
 
             ### Download
 
-            | Platform | File |
-            |:---------|:-----|
-            | Linux x86_64 | `fog-mcp-linux-amd64` |
-            | macOS Apple Silicon (M1/M2/M3/M4) | `fog-mcp-macos-arm64` |
-            | macOS Intel | ⚠️ No pre-built binary - [build from source](https://github.com/luciusvo/fog-context#build-from-source) or use ARM64 via Rosetta 2 |
-            | Windows x86_64 | `fog-mcp-windows-amd64.exe` |
+            | Platform | Standard Binary | Semantic Search Binary (`-embed`) |
+            |:---------|:----------------|:----------------------------------|
+            | Linux x86_64 | `fog-mcp-linux-amd64` (musl) | `fog-mcp-linux-amd64-embed` (glibc) |
+            | macOS Apple Silicon | `fog-mcp-macos-arm64` | `fog-mcp-macos-arm64-embed` |
+            | Windows x86_64 | `fog-mcp-windows-amd64.exe` | `fog-mcp-windows-amd64-embed.exe` |
+            | macOS Intel | [build from source](https://github.com/luciusvo/fog-context#build-from-source) | [build from source](https://github.com/luciusvo/fog-context#build-from-source) |
 
             ### Quick Setup (Claude Desktop / Cline)
             ```json
