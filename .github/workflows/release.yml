@@ -22,13 +22,6 @@ jobs:
             file_name: fog-mcp-linux-amd64
             musl: true
 
-          # ── Linux ARM64 (Raspberry Pi 5, AWS Graviton) ────────────────────
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-musl
-            file_name: fog-mcp-linux-arm64
-            musl: true
-            cross: true          # use cross-rs for ARM cross-compilation
-
           # ── macOS Apple Silicon (M1/M2/M3/M4) ─────────────────────────────
           - os: macos-latest
             target: aarch64-apple-darwin
@@ -77,7 +70,9 @@ jobs:
       # ── Linux musl toolchain ──────────────────────────────────────────────
       - name: Install musl-tools (Linux x86_64)
         if: matrix.musl && !matrix.cross
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools musl-dev g++-x86-64-linux-gnu
 
       # ── ARM cross-compilation via cross-rs ───────────────────────────────
       - name: Install cross (Linux ARM64)
@@ -149,7 +144,6 @@ jobs:
             | Platform | File |
             |:---------|:-----|
             | Linux x86_64 | `fog-mcp-linux-amd64` |
-            | Linux ARM64 | `fog-mcp-linux-arm64` |
             | macOS Apple Silicon (M1/M2/M3/M4) | `fog-mcp-macos-arm64` |
             | macOS Intel | ⚠️ No pre-built binary - [build from source](https://github.com/luciusvo/fog-context#build-from-source) or use ARM64 via Rosetta 2 |
             | Windows x86_64 | `fog-mcp-windows-amd64.exe` |

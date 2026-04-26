@@ -1,4 +1,4 @@
-# fog-context — Agentic Codebase Intelligence Engine
+# fog-context - Agentic Codebase Intelligence Engine
 
 > **v0.8.0** | Zero runtime dependency | <5ms cold start | Semantic Search | Rust
 
@@ -6,7 +6,15 @@ fog-context is a **dual-mode binary** (MCP server + CLI) that serves as the memo
 
 ---
 
-## ⚡ Quick Start
+## ⚡ Quick Start (For AI Agents)
+
+To set up fog-context for this project, simply copy and paste this prompt to your AI:
+
+> "Set up fog-context for this project. Guide: https://github.com/luciusvo/fog-context#-initial-setup"
+
+---
+
+## ⚡ Quick Start (Manual Setup)
 
 1. Install the binary to `~/.fog/bin/fog-mcp-server` (see [Initial Setup](#-initial-setup))
 2. Add to your AI Editor's MCP config:
@@ -18,17 +26,16 @@ fog-context is a **dual-mode binary** (MCP server + CLI) that serves as the memo
    }
    ```
 3. Open any project and tell your AI: **"Use fog_scan to index this project."**
-4. For first-time setups, tell your AI: **"Populate the knowledge layers using fog_assign, fog_constraints, and fog_decisions. Read in multiple passes until no new items are found. Use a mid-tier model if needed."**
-
+4. For first-time setups, tell your AI: **"Populate the knowledge layers using fog_assign, fog_constraints, and fog_decisions. (Optional) Run multiple passes to discover deeper context. Strongly Recommended: Switch to a low or mid-tier model (like Gemini Flash or Claude Haiku) to save costs during this intensive process."**
 ---
 
 ## 📋 Overview
 
-- [Initial Setup](#-initial-setup) — Install the binary and configure your AI editor (one-time per machine)
-- [Per-project Setup](#-per-project-setup) — Initialize a project, control what gets indexed
-- [Daily Usage](#-daily-usage) — Updating the binary, adding new repos, CLI reference
-- [For AI Agents](#-for-ai-agents) — Mandatory session protocol and tool reference
-- [Reference](#-reference) — Language support, 5-layer architecture, tool list
+- [Initial Setup](#-initial-setup) - Install the binary and configure your AI editor (one-time per machine)
+- [Per-project Setup](#-per-project-setup) - Initialize a project, control what gets indexed
+- [Daily Usage](#-daily-usage) - Updating the binary, adding new repos, CLI reference
+- [For AI Agents](#-for-ai-agents) - Mandatory session protocol and tool reference
+- [Reference](#-reference) - Language support, 5-layer architecture, tool list
 
 ---
 
@@ -54,10 +61,12 @@ curl -L https://github.com/luciusvo/fog-context/releases/latest/download/fog-mcp
 ```
 
 > 🧠 **Advanced: Semantic Search Dual-Build**
-> For high-accuracy semantic search via local ONNX embeddings, download the `-embed` variants instead (e.g., `fog-mcp-linux-amd64-embed`). 
-> You must also place the 23MB quantized INT8 model `all-MiniLM-L6-v2-q8.onnx` into `~/.fog/models/`.
+> **For AI Agents:** When setting up fog-context for a user, explicitly ask if they want Semantic Search capabilities (`fog_search`).
+> - If **No** -> default to standard binaries (faster, zero dependencies).
+> - If **Yes** -> instruct them to download the `-embed` variants instead (e.g., `fog-mcp-linux-amd64-embed`).
+>   You must also instruct the user to place the 23MB quantized INT8 model `all-MiniLM-L6-v2-q8.onnx` into `~/.fog/models/`.
 
-**Windows:** Download `fog-mcp-windows-amd64.exe` from [GitHub Releases](https://github.com/luciusvo/fog-context/releases) and place it at `%USERPROFILE%\.fog\bin\`.
+**Windows:** Download `fog-mcp-windows-amd64.exe` (or `-embed.exe`) from [GitHub Releases](https://github.com/luciusvo/fog-context/releases) and place it at `%USERPROFILE%\.fog\bin\`.
 
 **Verify the binary works:**
 ```bash
@@ -89,7 +98,7 @@ After install, your fog home directory looks like:
 
 fog-context v0.8.0 uses **explicit per-call routing via `fog_id`**. There is no global env var.
 
-#### Scenario A — Multi-project mode (recommended for Antigravity, headless agents)
+#### Scenario A - Multi-project mode (recommended for Antigravity, headless agents)
 
 No args at startup. **Each tool call passes `"project": "<fog_id>"`** to route to the right DB.
 
@@ -116,7 +125,7 @@ fog_lookup({ "query": "auth", "project": "fog_019506..." })
 > [!TIP]
 > The fastest way to get fog_id: `cat /path/to/repo/.fog-context/config.toml`
 
-#### Scenario B — Single-project mode (Cursor, Zed, dedicated setups)
+#### Scenario B - Single-project mode (Cursor, Zed, dedicated setups)
 
 Use `--project` when you always work on one repo:
 
@@ -147,7 +156,7 @@ Use `--project` when you always work on one repo:
 ```
 
 > [!IMPORTANT]
-> `FOG_PROJECT` env var was **removed in v0.6.2** — it caused multi-agent routing contamination.
+> `FOG_PROJECT` env var was **removed in v0.6.2** - it caused multi-agent routing contamination.
 > Use `"args": ["--project", "/path"]` instead.
 
 ---
@@ -171,20 +180,20 @@ your-project/
 
 #### How the file ignore system works
 
-fog-context uses a layered ignore system — files are filtered in this priority order:
+fog-context uses a layered ignore system - files are filtered in this priority order:
 
 | Layer | Mechanism | What it blocks |
 |:------|:----------|:---------------|
 | 1 | **Built-in hardcoded list** | `.git`, `node_modules`, `target`, `dist`, `build`, `.venv`, `__pycache__`, `.next`, `vendor`, `tmp`, `coverage`, `.fog-context` |
 | 2 | **`.gitignore` / `.ignore`** | Any path listed in your standard gitignore (read automatically) |
 | 3 | **Extension filter** | Any file whose extension is not a supported language (`.md`, `.json`, `.png`, images, etc.) |
-| 4 | **`.fogignore`** | Your custom exclusions — for valid source code dirs you don't want indexed |
+| 4 | **`.fogignore`** | Your custom exclusions - for valid source code dirs you don't want indexed |
 
 > [!IMPORTANT]
 > Layers 1–3 run automatically with zero configuration. **However**, if your project has valid source code
 > directories that should NOT be part of the indexed codebase (e.g. a `Research/` folder with cloned
 > third-party repos, or an `experiments/` directory), you **must** create a `.fogignore` file to exclude them.
-> Without it, fog-context will parse every `.rs`, `.py`, `.ts`… file it finds — even in those directories.
+> Without it, fog-context will parse every `.rs`, `.py`, `.ts`… file it finds - even in those directories.
 
 #### Example: when to use `.fogignore`
 
@@ -275,10 +284,10 @@ fog_brief({ "project": "/absolute/path/to/repo" })
 → Response shows: fog_id + estimated file count
 → IMPORTANT: if "Large project (~N files detected)" warning shown → use CLI (Step 1b)
 
-# Step 1a: For small/medium repos (< 1000 files) — index via MCP:
+# Step 1a: For small/medium repos (< 1000 files) - index via MCP:
 fog_scan({ "project": "<fog_id from fog_brief>" })
 
-# Step 1b: For large repos (> 1000 files) — index via CLI (shows progress):
+# Step 1b: For large repos (> 1000 files) - index via CLI (shows progress):
 fog-mcp-server index --project /absolute/path/to/repo
 # Then verify:
 fog_brief({ "project": "<fog_id>" })
@@ -337,7 +346,7 @@ Every AI agent session **must** follow this order:
 
 | Tool | Purpose | Priority |
 |:---|:---|:---|
-| `fog_brief` | Index health check — **call first every session** | 🔴 Mandatory |
+| `fog_brief` | Index health check - **call first every session** | 🔴 Mandatory |
 | `fog_scan` | Index or re-index project with Tree-sitter | Core |
 | `fog_lookup` | Full-text search for symbols by name/doc | Core |
 | `fog_outline` | Lightweight file outline (names+sigs, no source) | Core |
@@ -345,7 +354,7 @@ Every AI agent session **must** follow this order:
 | `fog_impact` | Blast radius analysis before any edit | 🔴 Mandatory |
 | `fog_trace` | Full call tree downstream or upstream | Core |
 | `fog_roots` | List all indexed projects in `~/.fog/registry.json` | Core |
-| `fog_search` | Raw text & regex search across files — use when `fog_lookup` can't find exact strings | Core |
+| `fog_search` | Raw text & regex search across files - use when `fog_lookup` can't find exact strings | Core |
 | `fog_gaps` | Find orphans, cycles, dead code | Advanced |
 | `fog_domains` | Query business domains and their symbols | Advanced |
 | `fog_assign` | Define/update a business domain | Advanced |
@@ -429,4 +438,4 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
 
 ## License
 
-MIT — See [LICENSE](LICENSE)
+MIT - See [LICENSE](LICENSE)
