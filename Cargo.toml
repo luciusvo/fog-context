@@ -58,7 +58,7 @@ tempfile   = "3"
 insta      = { version = "1", features = ["json"] }
 
 # Embedding (Semantic Search)
-ort        = { version = "=2.0.0-rc.12", default-features = false, features = ["std", "ndarray", "download-binaries", "tls-native"] }
+ort        = { version = "=2.0.0-rc.12", default-features = false, features = ["std", "ndarray", "download-binaries", "tls-rustls"] }
 tokenizers = "0.15"
 ndarray    = "0.17"
 
