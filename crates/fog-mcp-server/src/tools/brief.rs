@@ -93,16 +93,7 @@ pub fn handle(
                 })
                 .unwrap_or_else(|| "unknown".to_string());
 
-            // Fix 2: When project is not yet indexed, quickly count files so the
-            // agent can decide CLI vs MCP BEFORE submitting fog_scan.
-            let unindexed_advisory = if score.total_symbols == 0 {
-                format!(
-                    "\n\n> ⚠️ **Project not yet indexed.**\n\
-                     > Run `fog_scan({{}})` to index. Large projects (>1000 files) will automatically be redirected to the CLI."
-                )
-            } else {
-                String::new()
-            };
+
 
             // DB file size
             let db_size = {
@@ -154,15 +145,24 @@ pub fn handle(
 
             #[cfg(feature = "embedding")]
             {
+                lines.push("## 🔍 Semantic Search (Embedded Variant)".to_string());
                 if crate::semantic::get_model().is_some() {
-                    lines.push("## 🔍 Semantic Search: ✅ Active".to_string());
+                    lines.push("Status: ✅ Active".to_string());
                 } else {
-                    lines.push("## 🔍 Semantic Search: ⚠️ Model not found\n   Place model at: ~/.fog/models/all-MiniLM-L6-v2-q8.onnx (~23MB)\n   Download: fog-context.md#semantic-setup".to_string());
+                    lines.push("> [!WARNING]".to_string());
+                    lines.push("> **Model not found**".to_string());
+                    lines.push("> Place model and tokenizer at: ~/.fog/models/".to_string());
+                    lines.push("> ```bash".to_string());
+                    lines.push("> curl -L https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/onnx/model_quantized.onnx -o ~/.fog/models/all-MiniLM-L6-v2-q8.onnx".to_string());
+                    lines.push("> curl -L https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/tokenizer.json -o ~/.fog/models/tokenizer.json".to_string());
+                    lines.push("> ```".to_string());
+                    lines.push("> Reference: https://github.com/luciusvo/fog-context#semantic-setup".to_string());
                 }
             }
             #[cfg(not(feature = "embedding"))]
             {
-                lines.push("## 🔍 Semantic Search: ❌ Disabled in this build".to_string());
+                lines.push("## 🔍 Semantic Search (Normal Variant)".to_string());
+                lines.push("Status: ❌ Disabled in this build".to_string());
             }
 
             lines.push(String::new());
@@ -171,6 +171,7 @@ pub fn handle(
             // Sprint 3D: mandatory enforcement reminder for empty layers
             if score.total_symbols > 0 {
                 if score.total_domains == 0 || score.total_constraints == 0 {
+                    lines.push("---".to_string());
                     lines.push(r#"
 ## 🔴 REQUIRED ACTIONS
 - L2 (Business Domains): fog_assign({ "domain": "...", "symbols": [...] })
@@ -191,7 +192,7 @@ Run before proceeding with any code analysis."#.to_string());
                 lines.push(format!("- Tools invoked (global pool):  **{}**", total_calls));
             }
 
-            ToolCallResult::ok(format!("{}{unindexed_advisory}", lines.join("\n")))
+            ToolCallResult::ok(lines.join("\n"))
         }
         Err(e) => ToolCallResult::err(format!("fog_brief error: {e}")),
     }

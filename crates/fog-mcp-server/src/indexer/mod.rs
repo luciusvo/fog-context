@@ -52,7 +52,7 @@ pub fn run_scan(
         Err(e) => return ToolCallResult::ok(e),
     };
 
-    if scanned.len() > 1000 && db.total_symbols() == 0 {
+    if scanned.len() > 500 && db.total_symbols() == 0 {
         let fog_id = crate::registry::ensure_project_id(&project_root.to_string_lossy());
         return ToolCallResult::ok(format!(
             "⚠️ **Large codebase detected ({count} files)**\n\n\
@@ -63,7 +63,8 @@ pub fn run_scan(
              After CLI completes, verify with:\n\
              ```\n\
              fog_brief({{ \"project\": \"{fog_id}\" }})\n\
-             ```",
+             ```\n\n\
+             Then, populate the knowledge layers (Multiple passes): fog_assign, fog_constraints, fog_decisions.",
             count = scanned.len(),
             path = project_root.display(),
             fog_id = fog_id,
@@ -215,7 +216,7 @@ fn phase_format_result(
         ));
     }
 
-    let large_repo_warning = if file_count > 1000 {
+    let large_repo_warning = if file_count > 500 {
         format!(
             "\n\n> ⚠️ **Large repo ({} files detected)**\n\
              > For faster future updates, prefer CLI indexing:\n\
@@ -250,15 +251,16 @@ fn phase_format_result(
     if let Ok(score) = db.knowledge_score() {
         if score.layer_score == 0 {
             bootstrap_hint = r#"
-## 🟡 Knowledge Layers 2-4 are empty (Score: 0/100)
 
-To unlock full codebase intelligence, tell your AI:
-> "Populate fog-context knowledge layers for this codebase.
->  Read in multiple passes. Stop when a pass adds fewer than 3 new items,
->  or after 5 passes."
+---
 
-💡 This is read-heavy work. Use a **mid-tier model** (Gemini Flash, Claude Haiku)
-   to save cost. A typical 1000-symbol project takes 2-3 minutes.
+> [!IMPORTANT]
+> 🟡 **Knowledge Layers 2-4 are empty** — fog_scan is done, but codebase intelligence is not yet unlocked.
+>
+> Tell your AI (or copy-paste to user):
+> **"Populate fog-context knowledge layers for this codebase. Read in multiple passes. Stop when a pass adds fewer than 3 new items, or after 5 passes."**
+>
+> 💡 This is read-heavy work. Use a **mid-tier model** (Gemini Flash, Claude Haiku) to save cost. A typical 1000-symbol project takes 2-3 minutes.
 "#.to_string();
         }
     }
@@ -280,9 +282,9 @@ To unlock full codebase intelligence, tell your AI:
          - **Files:** {total} scanned, {indexed} indexed, {deleted} deleted\n\
          - **Symbols (new this scan):** {syms}\n\
          - **Edges:** {intra} intra-file + {cross} cross-file = {total_edges} total\n\
-         - **Elapsed:** {elapsed}ms\n{bootstrap_hint}\
+         - **Elapsed:** {elapsed}ms\n\
          \n\
-         Next: `fog_lookup`, `fog_inspect`, `fog_impact` to explore the graph.{warnings}{large_repo}",
+         Next: `fog_lookup`, `fog_inspect`, `fog_impact` to explore the graph.{warnings}{large_repo}{bootstrap_hint}",
         fog_id = fog_id,
         path = project_root.display(),
         total = file_count,
@@ -298,4 +300,3 @@ To unlock full codebase intelligence, tell your AI:
         warnings = warnings,
     ))
 }
-

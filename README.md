@@ -82,7 +82,10 @@ $ fog_impact({ "target": "verify_token" })
 
 To set up fog-context for this project, simply copy and paste this prompt to your AI:
 
-> "Set up fog-context for this project. Before downloading the binary, ask me if I want the Normal version (fast, lightweight) or the Embedded version (includes semantic search). Guide: https://github.com/luciusvo/fog-context#-initial-setup"
+> "Set up fog-context for this project.
+> 1. Check if you are already connected to fog-context via MCP. If YES -> skip to step 3.
+> 2. If NO -> ask me if I want the Normal version or Embedded version before downloading.
+> 3. Populate the knowledge layers (Read in multiple passes). Guide: https://github.com/luciusvo/fog-context#-initial-setup"
 
 ---
 
@@ -155,12 +158,14 @@ curl -L https://github.com/luciusvo/fog-context/releases/latest/download/fog-mcp
 curl -L https://github.com/luciusvo/fog-context/releases/latest/download/fog-mcp-macos-arm64-embed \
   -o ~/.fog/bin/fog-mcp-server && chmod +x ~/.fog/bin/fog-mcp-server
 
-# Download the ONNX model (Mandatory for Semantic Search)
+# Download the ONNX model and Tokenizer (Mandatory for Semantic Search)
 curl -L https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/onnx/model_quantized.onnx \
   -o ~/.fog/models/all-MiniLM-L6-v2-q8.onnx
+curl -L https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/tokenizer.json \
+  -o ~/.fog/models/tokenizer.json
 ```
 
-**Windows:** Download `fog-mcp-windows-amd64.exe` (or `-embed.exe`) from [GitHub Releases](https://github.com/luciusvo/fog-context/releases) and place it at `%USERPROFILE%\.fog\bin\fog-mcp-server.exe`. If using Embedded, place the `.onnx` model in `%USERPROFILE%\.fog\models\`.
+**Windows:** Download `fog-mcp-windows-amd64.exe` (or `-embed.exe`) from [GitHub Releases](https://github.com/luciusvo/fog-context/releases) and place it at `%USERPROFILE%\.fog\bin\fog-mcp-server.exe`. If using Embedded, place both the `.onnx` model and `tokenizer.json` in `%USERPROFILE%\.fog\models\`.
 
 **Verify the binary works:**
 ```bash

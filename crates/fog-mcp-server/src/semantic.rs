@@ -20,7 +20,7 @@ static ORT_INIT: OnceLock<()> = OnceLock::new();
 pub fn get_model() -> Option<&'static SemanticModel> {
     MODEL.get_or_init(|| {
         load_model().unwrap_or_else(|e| {
-            tracing::warn!("Failed to load semantic model: {}. Falling back to BM25 search.", e);
+            eprintln!("ERROR: Failed to load semantic model: {:?}", e);
             None
         })
     }).as_ref()
