@@ -82,10 +82,12 @@ $ fog_impact({ "target": "verify_token" })
 
 To set up fog-context for this project, simply copy and paste this prompt to your AI:
 
-> "Set up fog-context for this project.
-> 1. Check if you are already connected to fog-context via MCP. If YES -> skip to step 3.
-> 2. If NO -> ask me if I want the Normal version or Embedded version before downloading.
-> 3. Populate the knowledge layers (Read in multiple passes). Guide: https://github.com/luciusvo/fog-context#-initial-setup"
+> "Set up fog-context for this project:
+> 1. Call `fog_brief({})` first to check current status.
+> 2. If `fog_brief` responds (even with 0 symbols) → binary is **already installed**. Do NOT ask about downloading. Skip to step 4.
+> 3. If `fog_brief` tool is unavailable → binary is NOT installed. Ask me: 'Normal version (fast) or Embedded (semantic search)?' then follow: https://github.com/luciusvo/fog-context#-initial-setup
+> 4. Run `fog_scan({ \"project\": \"/absolute/path\" })` to index the codebase.
+> 5. Populate knowledge layers (multiple passes, stop when < 3 new items per pass)."
 
 ---
 

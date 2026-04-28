@@ -7,7 +7,25 @@ Format: [Semantic Versioning](https://semver.org). Entries grouped by type:
 
 ---
 
+## [0.8.1] - 2026-04-29
+
+Patch release: UX/DX hardening across `fog_brief`, `fog_scan`, and documentation (Sprint 6).
+
+### Fixed
+
+- **`fog_brief` — Semantic Search warning (BUG-A1):** Replaced broken `fog-context.md#semantic-setup` link with live HuggingFace URLs. Added missing `tokenizer.json` curl command (required alongside `.onnx`). Reformatted using `[!WARNING]` for IDE visibility.
+- **`fog_brief` — REQUIRED ACTIONS separator (BUG-A2):** Added `---` horizontal rule before the `🔴 REQUIRED ACTIONS` block to visually separate it from project stats.
+- **`fog_brief` — Duplicate "run fog_scan" message (BUG-A3):** Removed redundant `unindexed_advisory` string that appeared at the bottom of output when project was not yet indexed (duplicated the `version_banner` at the top).
+- **`fog_brief` — Binary variant label (BUG-A4):** Output now explicitly labels the running build as `Normal Variant` or `Embedded Variant` under the Semantic Search section, allowing AI Agents to detect installation state and skip redundant download questions.
+- **`fog_scan` — CLI redirect threshold (BUG-B1):** Lowered early-exit threshold from >1000 to >500 files to prevent MCP timeout on mid-sized repos (most IDE MCP clients time out around 90–120 seconds).
+- **`fog_scan` — Large repo warning threshold (BUG-B2):** Lowered post-scan CLI suggestion threshold from >1000 to >500 files (consistent with B1).
+- **`fog_scan` — CLI redirect missing next steps (BUG-B3):** CLI redirect message now includes guidance to populate knowledge layers (fog_assign, fog_constraints, fog_decisions) after CLI indexing completes.
+- **`README.md` — AI Agent setup prompt (BUG-C1):** Rewrote the Quick Start AI prompt with explicit conditional logic: Agent calls `fog_brief({})` first — if it responds, binary is already installed (skip download entirely); if tool is unavailable, ask user for Normal vs Embedded preference.
+
+---
+
 ## [0.8.0] - 2026-04-26
+
 
 Major feature release: Semantic Search dual-build, raw text search, and cross-language AST bridge hardening.
 

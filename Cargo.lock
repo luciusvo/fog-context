@@ -417,7 +417,7 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "fog-mcp-server"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "anyhow",
  "cc",
@@ -457,7 +457,7 @@ dependencies = [
 
 [[package]]
 name = "fog-memory"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "fog-types",
  "ort",
@@ -472,7 +472,7 @@ dependencies = [
 
 [[package]]
 name = "fog-types"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "async-trait",
  "chrono",
