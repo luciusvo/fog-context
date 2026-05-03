@@ -52,23 +52,19 @@ pub fn run_scan(
         Err(e) => return ToolCallResult::ok(e),
     };
 
+    // PATCHED: removed hard-gate. Original blocked >500 files on first scan.
+    // Now: warn to stderr but proceed. Set FOG_BLOCK_LARGE=1 to restore old behavior.
     if scanned.len() > 500 && db.total_symbols() == 0 {
-        let fog_id = crate::registry::ensure_project_id(&project_root.to_string_lossy());
-        return ToolCallResult::ok(format!(
-            "⚠️ **Large codebase detected ({count} files)**\n\n\
-             MCP scan may timeout. Use CLI for initial indexing:\n\
-             ```bash\n\
-             ~/.fog/bin/fog-mcp-server index --project {path}\n\
-             ```\n\n\
-             After CLI completes, verify with:\n\
-             ```\n\
-             fog_brief({{ \"project\": \"{fog_id}\" }})\n\
-             ```\n\n\
-             Then, populate the knowledge layers (Multiple passes): fog_assign, fog_constraints, fog_decisions.",
-            count = scanned.len(),
-            path = project_root.display(),
-            fog_id = fog_id,
-        ));
+        if std::env::var("FOG_BLOCK_LARGE").as_deref() == Ok("1") {
+            let fog_id = crate::registry::ensure_project_id(&project_root.to_string_lossy());
+            return ToolCallResult::ok(format!(
+                "⚠️ **Large codebase detected ({count} files)** [BLOCKED by FOG_BLOCK_LARGE=1]\n\n\
+                 fog_brief({{ \"project\": \"{fog_id}\" }})",
+                count = scanned.len(),
+                fog_id = fog_id,
+            ));
+        }
+        eprintln!("[fog] ⚠️  Large codebase ({} files). Indexing may take a while...", scanned.len());
     }
 
     let stats = match phase_parse(project_root, db, &scanned, full) {
