@@ -479,7 +479,7 @@ async fn main() {
                 }
             }
 
-            let result = crate::indexer::run_scan(&project_root, &db, full);
+            let result = crate::indexer::run_scan(&project_root, &db, full, true);
             if result.is_error {
                 // Print actual error so agents/users can diagnose
                 let err_text = result.content.first()

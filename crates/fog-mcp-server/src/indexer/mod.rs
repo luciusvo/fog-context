@@ -44,6 +44,7 @@ pub fn run_scan(
     project_root: &Path,
     db: &fog_memory::MemoryDb,
     full: bool,
+    is_cli: bool,
 ) -> ToolCallResult {
     let start = std::time::Instant::now();
 
@@ -53,22 +54,26 @@ pub fn run_scan(
     };
 
     if scanned.len() > 500 && db.total_symbols() == 0 {
-        let fog_id = crate::registry::ensure_project_id(&project_root.to_string_lossy());
-        return ToolCallResult::ok(format!(
-            "⚠️ **Large codebase detected ({count} files)**\n\n\
-             MCP scan may timeout. Use CLI for initial indexing:\n\
-             ```bash\n\
-             ~/.fog/bin/fog-mcp-server index --project {path}\n\
-             ```\n\n\
-             After CLI completes, verify with:\n\
-             ```\n\
-             fog_brief({{ \"project\": \"{fog_id}\" }})\n\
-             ```\n\n\
-             Then, populate the knowledge layers (Multiple passes): fog_assign, fog_constraints, fog_decisions.",
-            count = scanned.len(),
-            path = project_root.display(),
-            fog_id = fog_id,
-        ));
+        if is_cli {
+            eprintln!("[fog] ⚠️  Large codebase ({} files). This may take a while...", scanned.len());
+        } else {
+            let fog_id = crate::registry::ensure_project_id(&project_root.to_string_lossy());
+            return ToolCallResult::ok(format!(
+                "⚠️ **Large codebase detected ({count} files)**\n\n\
+                 MCP scan may timeout. Use CLI for initial indexing:\n\
+                 ```bash\n\
+                 ~/.fog/bin/fog-mcp-server index --project {path}\n\
+                 ```\n\n\
+                 After CLI completes, verify with:\n\
+                 ```\n\
+                 fog_brief({{ \"project\": \"{fog_id}\" }})\n\
+                 ```\n\n\
+                 Then, populate the knowledge layers (Multiple passes): fog_assign, fog_constraints, fog_decisions.",
+                count = scanned.len(),
+                path = project_root.display(),
+                fog_id = fog_id,
+            ));
+        }
     }
 
     let stats = match phase_parse(project_root, db, &scanned, full) {

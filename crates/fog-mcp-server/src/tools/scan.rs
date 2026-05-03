@@ -29,5 +29,5 @@ pub fn handle(args: &Value, db: &MemoryDb, project_root: &Path) -> ToolCallResul
     let full = args["full"].as_bool().unwrap_or(false);
 
     // Delegate to the two-pass Tree-sitter indexer
-    crate::indexer::run_scan(project_root, db, full)
+    crate::indexer::run_scan(project_root, db, full, false)
 }
