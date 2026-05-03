@@ -87,7 +87,7 @@ pub fn run_scan(
 
     let fog_id = phase_register(project_root, db, scanned.len(), stats.symbols_created);
 
-    phase_format_result(project_root, db, &stats, &fog_id, scanned.len(), elapsed)
+    phase_format_result(project_root, db, &stats, &fog_id, scanned.len(), elapsed, is_cli)
 }
 
 fn phase_walk(project_root: &Path) -> Result<Vec<walker::ScannedFile>, String> {
@@ -204,6 +204,7 @@ fn phase_format_result(
     fog_id: &str,
     file_count: usize,
     elapsed_ms: u128,
+    is_cli: bool,
 ) -> ToolCallResult {
     let total_symbols = db.total_symbols();
 
@@ -221,7 +222,7 @@ fn phase_format_result(
         ));
     }
 
-    let large_repo_warning = if file_count > 500 {
+    let large_repo_warning = if !is_cli && file_count > 500 {
         format!(
             "\n\n> ⚠️ **Large repo ({} files detected)**\n\
              > For faster future updates, prefer CLI indexing:\n\
