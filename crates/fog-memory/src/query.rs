@@ -1262,7 +1262,7 @@ mod tests {
         let db = open_test_db();
         let score = db.knowledge_score().unwrap();
         assert_eq!(score.layer_score, 0, "empty DB should score 0");
-        assert_eq!(score.schema_version, "0.4.0");
+        assert_eq!(score.schema_version, "0.9.0");
     }
 
     #[test]

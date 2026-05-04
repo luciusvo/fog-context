@@ -20,8 +20,8 @@ use rusqlite::Connection;
 
 use crate::{MemoryError, MemoryResult};
 
-/// Expected schema version - must match fog-context v0.4.0
-const EXPECTED_SCHEMA_VERSION: &str = "0.4.0";
+/// Expected schema version - must match fog-context v0.9.0
+const EXPECTED_SCHEMA_VERSION: &str = "0.9.0";
 
 /// Path relative to project root where fog-context stores its DB.
 const DB_RELATIVE_PATH: &str = ".fog-context/context.db";
@@ -114,10 +114,17 @@ CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT
 );
-INSERT OR IGNORE INTO meta(key, value) VALUES ('schema_version', '0.4.0');
+INSERT OR IGNORE INTO meta(key, value) VALUES ('schema_version', '0.9.0');
 CREATE TABLE IF NOT EXISTS symbol_embeddings (
     symbol_id INTEGER PRIMARY KEY REFERENCES symbols(id) ON DELETE CASCADE,
     vector BLOB NOT NULL
+);
+CREATE TABLE IF NOT EXISTS symbol_tags (
+    symbol_name TEXT NOT NULL,
+    tag_type TEXT NOT NULL,
+    tag_value TEXT NOT NULL,
+    source TEXT DEFAULT 'config',
+    PRIMARY KEY (symbol_name, tag_type, tag_value)
 );
 ";
 
@@ -219,8 +226,8 @@ pub fn open_shared_db(project_root: &Path) -> MemoryResult<MemoryDb> {
         if version2 != EXPECTED_SCHEMA_VERSION {
             // Bump the stored version to avoid repeated migration on next open
             let _ = conn.execute(
-                "INSERT INTO meta(key,value) VALUES('schema_version','0.4.0')
-                 ON CONFLICT(key) DO UPDATE SET value='0.4.0'",
+                "INSERT INTO meta(key,value) VALUES('schema_version','0.9.0')
+                 ON CONFLICT(key) DO UPDATE SET value='0.9.0'",
                 [],
             );
         }
@@ -272,6 +279,17 @@ fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
         "CREATE TABLE IF NOT EXISTS symbol_embeddings (
             symbol_id INTEGER PRIMARY KEY REFERENCES symbols(id) ON DELETE CASCADE,
             vector BLOB NOT NULL
+        );"
+    )?;
+
+    // v0.9.0: added symbol_tags table
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS symbol_tags (
+            symbol_name TEXT NOT NULL,
+            tag_type TEXT NOT NULL,
+            tag_value TEXT NOT NULL,
+            source TEXT DEFAULT 'config',
+            PRIMARY KEY (symbol_name, tag_type, tag_value)
         );"
     )?;
 
@@ -394,11 +412,19 @@ pub(crate) mod test_helpers {
                 key TEXT PRIMARY KEY,
                 value TEXT
             );
-            INSERT INTO meta(key, value) VALUES ('schema_version', '0.4.0');
+            INSERT INTO meta(key, value) VALUES ('schema_version', '0.9.0');
             
             CREATE TABLE symbol_embeddings (
                 symbol_id INTEGER PRIMARY KEY REFERENCES symbols(id) ON DELETE CASCADE,
                 vector BLOB NOT NULL
+            );
+            
+            CREATE TABLE symbol_tags (
+                symbol_name TEXT NOT NULL,
+                tag_type TEXT NOT NULL,
+                tag_value TEXT NOT NULL,
+                source TEXT DEFAULT 'config',
+                PRIMARY KEY (symbol_name, tag_type, tag_value)
             );
             ",
         ).expect("test schema");
@@ -422,7 +448,7 @@ mod tests {
             [],
             |row| row.get(0),
         ).unwrap();
-        assert_eq!(version, "0.4.0");
+        assert_eq!(version, "0.9.0");
     }
 
     #[test]

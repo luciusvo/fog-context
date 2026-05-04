@@ -17,7 +17,7 @@ use crate::protocol::{ToolCallResult, ToolDef};
 use crate::registry::Registry;
 use crate::tools;
 
-/// Generate the list of all 15 tools for `tools/list`.
+/// Generate the list of all 16 tools for `tools/list`.
 pub fn list_tools() -> Vec<ToolDef> {
     vec![
         // ── Core (8) ────────────────────────────────────────────────────────────
@@ -37,6 +37,7 @@ pub fn list_tools() -> Vec<ToolDef> {
         tools::constraints::definition(),
         tools::decisions::definition(),
         tools::import::definition(),
+        tools::overlay::definition(),
     ]
 }
 
@@ -77,6 +78,7 @@ pub fn dispatch(
         "fog_assign"          => tools::assign::handle(args, &db_guard),
         "fog_constraints"     => tools::constraints::handle(args, &db_guard, project_root),
         "fog_decisions"       => tools::decisions::handle(args, &db_guard, project_root),
+        "fog_overlay"         => tools::overlay::handle(args, &db_guard, project_root),
         _ => ToolCallResult::err(format!(
             "Unknown tool: '{tool_name}'. Available: {}",
             list_tools().iter().map(|t| t.name).collect::<Vec<_>>().join(", ")
