@@ -561,6 +561,14 @@ pub fn write_agents_md(root: &Path, _files: usize, symbols: usize) {
          \n\
          ⚠️ **Anti-Blackbox Rule:** You MUST NOT bypass cross-validation. \n\
          Even with a detailed prompt, ALWAYS verify real codebase state via `fog_inspect` before modifying code.\n\
+         \n\
+         ### MANDATORY: End-of-Session Context Update\n\
+         After completing code changes, update if session introduced:\n\
+         - New entry points → `.fog-context/security.toml` [sources]\n\
+         - New DB queries or shell calls → `.fog-context/security.toml` [sinks]\n\
+         - New validation functions → `.fog-context/security.toml` [sanitizers]\n\
+         - New sensitive data models → `.fog-context/labels.toml` [pii]\n\
+         After editing configs, run `fog_overlay` to apply to graph.\n\n\
          {onboarding}<!-- /fog-context -->"
     );
 

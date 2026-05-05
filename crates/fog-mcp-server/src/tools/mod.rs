@@ -1,6 +1,6 @@
 //! fog-mcp-server/src/tools/mod.rs
 //!
-//! 16 fog-context tool handlers.
+//! 17 fog-context tool handlers.
 //! Each tool delegates its DB work to fog-memory - NO direct SQL here.
 //!
 //! ## Tool Inventory
@@ -38,3 +38,4 @@ pub mod trace;
 pub mod constraints;
 pub mod search;
 pub mod overlay;
+pub mod bootstrap;
