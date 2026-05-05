@@ -47,7 +47,7 @@ pub fn handle(_args: &Value, db: &MemoryDb, project_root: &Path) -> ToolCallResu
     // Helper to query actual symbols matching a pattern
     let get_symbols = |pattern: &str| -> Vec<String> {
         db.conn()
-            .prepare("SELECT name FROM symbols WHERE name LIKE ?")
+            .prepare("SELECT name FROM symbols WHERE name LIKE ? LIMIT 10")
             .and_then(|mut stmt| {
                 let rows: Result<Vec<String>, _> = stmt.query_map([pattern], |r| r.get(0))?.collect();
                 rows
