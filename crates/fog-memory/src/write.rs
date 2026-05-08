@@ -17,13 +17,17 @@ use serde::{Deserialize, Serialize};
 // Arg + result types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RecordDecisionArgs {
     pub functions: Vec<String>,
     pub reason: String,
     pub domain: Option<String>,
     pub revert_risk: Option<String>, // "LOW" | "MEDIUM" | "HIGH"
     pub supersedes_id: Option<i64>,
+    pub file_path: Option<String>,
+    pub line_range: Option<String>,
+    pub granularity: Option<String>,
+    pub status: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,19 +88,32 @@ impl MemoryDb {
                 rusqlite::params_from_iter(args.functions.iter()),
                 |row| row.get(0),
             ).unwrap_or(0);
-            count > 0
+            
+            if count > 0 && count < args.functions.len() as i64 {
+                tracing::warn!(
+                    "fog-memory: {}/{} functions not in symbol index — run fog_scan first",
+                    args.functions.len() as i64 - count,
+                    args.functions.len()
+                );
+            }
+            
+            count == args.functions.len() as i64
         };
 
         // Insert new decision
         conn.execute(
-            "INSERT INTO decisions (domain, functions, reason, revert_risk, validated, status)
-             VALUES (?1, ?2, ?3, ?4, ?5, 'active')",
+            "INSERT INTO decisions (domain, functions, reason, revert_risk, validated, status, file_path, line_range, granularity)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             rusqlite::params![
                 args.domain,
                 serde_json::to_string(&args.functions).map_err(crate::MemoryError::Json)?,
                 args.reason,
                 args.revert_risk.as_deref().unwrap_or("LOW"),
                 validated as i64,
+                args.status.as_deref().unwrap_or("active"),
+                args.file_path,
+                args.line_range,
+                args.granularity.unwrap_or_else(|| "function".to_string()),
             ],
         ).map_err(crate::MemoryError::Database)?;
 
@@ -191,6 +208,9 @@ impl MemoryDb {
                 ).map_err(crate::MemoryError::Database)?;
             }
         }
+
+        // Recompute dependencies for the new/updated domain
+        self.compute_domain_dependencies()?;
 
         tracing::debug!(domain = %args.name, "fog-memory: domain defined");
         Ok(())
@@ -369,7 +389,7 @@ mod tests {
             reason: "Switched to async runtime".to_string(),
             domain: Some("Gateway".to_string()),
             revert_risk: Some("HIGH".to_string()),
-            supersedes_id: None,
+            ..Default::default()
         }).unwrap();
         assert!(id > 0);
     }
@@ -380,17 +400,15 @@ mod tests {
         let id1 = db.record_decision(RecordDecisionArgs {
             functions: vec!["auth".to_string()],
             reason: "Use HMAC".to_string(),
-            domain: None,
-            revert_risk: None,
-            supersedes_id: None,
+            ..Default::default()
         }).unwrap();
 
         let id2 = db.record_decision(RecordDecisionArgs {
             functions: vec!["auth".to_string()],
             reason: "Switch to RS256".to_string(),
-            domain: None,
             revert_risk: Some("HIGH".to_string()),
             supersedes_id: Some(id1),
+            ..Default::default()
         }).unwrap();
 
         // Verify old decision is marked historical

@@ -107,6 +107,28 @@ pub fn handle(
                 }
             };
 
+            // Calculate L2 Coverage & Domain Drift
+            let mapped_count: i64 = db.conn().query_row("SELECT COUNT(DISTINCT symbol_name) FROM domain_symbols", [], |r| r.get(0)).unwrap_or(0);
+            let total_symbols: i64 = db.conn().query_row("SELECT COUNT(*) FROM symbols", [], |r| r.get(0)).unwrap_or(0);
+            
+            let mut l2_warning = String::new();
+            if total_symbols > 0 {
+                let pct = (mapped_count as f64 / total_symbols as f64 * 100.0) as u8;
+                if pct < 30 {
+                    l2_warning = format!("  ⚠️ L2 Domain coverage: {pct}% ({mapped_count}/{total_symbols})");
+                }
+            }
+
+            let orphan_mappings: i64 = db.conn().query_row(
+                "SELECT COUNT(*) FROM domain_symbols ds LEFT JOIN symbols s ON s.name = ds.symbol_name WHERE s.id IS NULL AND ds.symbol_name IS NOT NULL", 
+                [], 
+                |row| row.get(0)
+            ).unwrap_or(0);
+            let mut drift_warning = String::new();
+            if orphan_mappings > 0 {
+                drift_warning = format!("  ⚠️ Domain drift detected: {orphan_mappings} mapped symbols no longer exist in code.");
+            }
+
             let mut lines = vec![
                 format!("# fog-context v{binary_version} — Status{version_banner}"),
                 // fog_id FIRST — agents must capture this for all subsequent calls
@@ -140,8 +162,58 @@ pub fn handle(
                 } else {
                     "  [□□□□□] L4 Causality: 0 Decision Records".to_string()
                 },
-                String::new(),
             ];
+
+            if !db.verify_json1() {
+                lines.push("  L4 Coverage: ❓ (requires JSON1 extension)".to_string());
+            } else {
+                let coverage_query = "
+                    WITH important_symbols AS (
+                        SELECT s.name
+                        FROM symbols s
+                        JOIN edges e ON e.target_id = s.id AND e.kind = 'CALLS'
+                        GROUP BY s.id
+                        HAVING COUNT(DISTINCT e.source_id) >= 3
+                    )
+                    SELECT
+                        COUNT(DISTINCT i.name) as total_important,
+                        COUNT(DISTINCT CASE WHEN EXISTS (
+                            SELECT 1 FROM decisions d
+                            WHERE EXISTS (SELECT 1 FROM json_each(d.functions) WHERE value = i.name)
+                        ) THEN i.name END) as covered
+                    FROM important_symbols i";
+                
+                if let Ok((total_important, covered)) = db.conn().query_row(coverage_query, [], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?))) {
+                    if total_important > 0 {
+                        let pct = (covered as f64 / total_important as f64 * 100.0) as u8;
+                        let warn = if pct < 50 { " ⚠️" } else { "" };
+                        lines.push(format!("  L4 Coverage: {}% ({}/{}) high-impact functions documented{}", pct, covered, total_important, warn));
+                    } else {
+                        lines.push("  L4 Coverage: 100% (No high-impact functions detected)".to_string());
+                    }
+                }
+            }
+
+            if !l2_warning.is_empty() {
+                lines.push(l2_warning);
+            }
+            if !drift_warning.is_empty() {
+                lines.push(drift_warning);
+            }
+            lines.push(String::new());
+
+            let tag_count: i64 = match db.conn().query_row("SELECT COUNT(*) FROM symbol_tags", [], |row| row.get(0)) {
+                Ok(c) => c,
+                Err(rusqlite::Error::SqliteFailure(_e, Some(msg))) if msg.contains("no such table") => 0,
+                Err(e) => return ToolCallResult::err(format!("Database error querying symbol_tags: {e}")),
+            };
+            lines.push("## 🛡️ Security Overlay".to_string());
+            if tag_count > 0 {
+                lines.push(format!("- **Tags applied:** {tag_count}"));
+            } else {
+                lines.push("- Status: ❌ No tags. Run `fog_bootstrap` then `fog_overlay`.".to_string());
+            }
+            lines.push(String::new());
 
             #[cfg(feature = "embedding")]
             {

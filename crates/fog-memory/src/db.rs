@@ -76,6 +76,8 @@ CREATE TABLE IF NOT EXISTS domain_symbols (
     symbol_name TEXT,
     UNIQUE(domain_id, symbol_id, symbol_name)
 );
+CREATE INDEX IF NOT EXISTS idx_domain_symbols_domain ON domain_symbols(domain_id);
+CREATE INDEX IF NOT EXISTS idx_domain_symbols_sym_name ON domain_symbols(symbol_name);
 CREATE TABLE IF NOT EXISTS domain_constraints (
     domain_id     INTEGER REFERENCES domains(id) ON DELETE CASCADE,
     constraint_id INTEGER REFERENCES constraints(id) ON DELETE CASCADE,
@@ -87,7 +89,9 @@ CREATE TABLE IF NOT EXISTS constraints (
     statement TEXT NOT NULL,
     severity TEXT DEFAULT 'WARNING',
     source_file TEXT,
-    domain_id INTEGER REFERENCES domains(id) ON DELETE SET NULL
+    domain_id INTEGER REFERENCES domains(id) ON DELETE SET NULL,
+    rule_type TEXT DEFAULT 'prose',
+    rule_config TEXT
 );
 CREATE TABLE IF NOT EXISTS decisions (
     id INTEGER PRIMARY KEY,
@@ -98,7 +102,10 @@ CREATE TABLE IF NOT EXISTS decisions (
     validated BOOLEAN DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active',
     superseded_by INTEGER REFERENCES decisions(id) ON DELETE SET NULL,
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (datetime('now')),
+    file_path TEXT,
+    line_range TEXT,
+    granularity TEXT DEFAULT 'function'
 );
 CREATE TABLE IF NOT EXISTS scratchpad (
     id INTEGER PRIMARY KEY,
@@ -110,6 +117,12 @@ CREATE TABLE IF NOT EXISTS scratchpad (
     updated_at TEXT DEFAULT (datetime('now')),
     UNIQUE(agent_role)
 );
+CREATE TABLE IF NOT EXISTS domain_dependencies (
+    source_domain_id INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+    target_domain_id INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+    weight INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (source_domain_id, target_domain_id)
+);
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT
@@ -119,6 +132,9 @@ CREATE TABLE IF NOT EXISTS symbol_embeddings (
     symbol_id INTEGER PRIMARY KEY REFERENCES symbols(id) ON DELETE CASCADE,
     vector BLOB NOT NULL
 );
+-- Security Overlay Layer (Phase S7)
+-- Maps symbols by name to security/privacy tags.
+-- Note: Uses symbol_name instead of symbol_id to persist across index rescans.
 CREATE TABLE IF NOT EXISTS symbol_tags (
     symbol_name TEXT NOT NULL,
     tag_type TEXT NOT NULL,
@@ -156,6 +172,13 @@ impl MemoryDb {
             .unwrap_or(0)
     }
 
+    /// Verify if SQLite json_each() function is available (JSON1 extension).
+    pub fn verify_json1(&self) -> bool {
+        self.conn
+            .query_row("SELECT 1 FROM json_each('[\"test\"]') LIMIT 1", [], |_| Ok(()))
+            .is_ok()
+    }
+
     /// Create a fresh in-memory DB with the fog-context v0.4.0 schema.
     /// Used as a safe fallback when no project DB exists yet.
     pub fn open_empty() -> MemoryResult<Self> {
@@ -165,6 +188,23 @@ impl MemoryDb {
             conn,
             db_path: PathBuf::from(":memory:"),
         })
+    }
+
+    /// Recompute the domain_dependencies table.
+    pub fn compute_domain_dependencies(&self) -> MemoryResult<()> {
+        let conn = self.conn();
+        conn.execute_batch("
+            DELETE FROM domain_dependencies;
+            INSERT INTO domain_dependencies (source_domain_id, target_domain_id, weight)
+            SELECT ds1.domain_id, ds2.domain_id, COUNT(*)
+            FROM edges e
+            JOIN symbols s1 ON e.source_id = s1.id
+            JOIN symbols s2 ON e.target_id = s2.id
+            JOIN domain_symbols ds1 ON ds1.symbol_name = s1.name
+            JOIN domain_symbols ds2 ON ds2.symbol_name = s2.name
+            WHERE ds1.domain_id != ds2.domain_id
+            GROUP BY ds1.domain_id, ds2.domain_id;
+        ").map_err(crate::MemoryError::Database)
     }
 }
 
@@ -293,6 +333,33 @@ fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
         );"
     )?;
 
+    // Phase 10A: L3/L4 schema updates
+    if !col_exists("decisions", "file_path") {
+        conn.execute_batch("
+            ALTER TABLE decisions ADD COLUMN file_path TEXT;
+            ALTER TABLE decisions ADD COLUMN line_range TEXT;
+            ALTER TABLE decisions ADD COLUMN granularity TEXT DEFAULT 'function';
+        ")?;
+    }
+
+    if !col_exists("constraints", "rule_type") {
+        conn.execute_batch("
+            ALTER TABLE constraints ADD COLUMN rule_type TEXT DEFAULT 'prose';
+            ALTER TABLE constraints ADD COLUMN rule_config TEXT;
+        ")?;
+    }
+
+    conn.execute_batch("
+        CREATE TABLE IF NOT EXISTS domain_dependencies (
+            source_domain_id INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+            target_domain_id INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+            weight INTEGER NOT NULL DEFAULT 1,
+            PRIMARY KEY (source_domain_id, target_domain_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_domain_symbols_domain ON domain_symbols(domain_id);
+        CREATE INDEX IF NOT EXISTS idx_domain_symbols_sym_name ON domain_symbols(symbol_name);
+    ")?;
+
     Ok(())
 }
 
@@ -369,6 +436,8 @@ pub(crate) mod test_helpers {
                 symbol_name TEXT,
                 UNIQUE(domain_id, symbol_id, symbol_name)
             );
+            CREATE INDEX idx_domain_symbols_domain ON domain_symbols(domain_id);
+            CREATE INDEX idx_domain_symbols_sym_name ON domain_symbols(symbol_name);
 
             CREATE TABLE domain_constraints (
                 domain_id     INTEGER REFERENCES domains(id) ON DELETE CASCADE,
@@ -382,7 +451,9 @@ pub(crate) mod test_helpers {
                 statement TEXT NOT NULL,
                 severity TEXT DEFAULT 'WARNING',
                 source_file TEXT,
-                domain_id INTEGER REFERENCES domains(id) ON DELETE SET NULL
+                domain_id INTEGER REFERENCES domains(id) ON DELETE SET NULL,
+                rule_type TEXT DEFAULT 'prose',
+                rule_config TEXT
             );
 
             CREATE TABLE decisions (
@@ -394,7 +465,10 @@ pub(crate) mod test_helpers {
                 validated BOOLEAN DEFAULT 0,
                 status TEXT NOT NULL DEFAULT 'active',
                 superseded_by INTEGER REFERENCES decisions(id) ON DELETE SET NULL,
-                created_at TEXT DEFAULT (datetime('now'))
+                created_at TEXT DEFAULT (datetime('now')),
+                file_path TEXT,
+                line_range TEXT,
+                granularity TEXT DEFAULT 'function'
             );
 
             CREATE TABLE scratchpad (
@@ -406,6 +480,13 @@ pub(crate) mod test_helpers {
                 blockers TEXT,
                 updated_at TEXT DEFAULT (datetime('now')),
                 UNIQUE(agent_role)
+            );
+
+            CREATE TABLE domain_dependencies (
+                source_domain_id INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+                target_domain_id INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+                weight INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY (source_domain_id, target_domain_id)
             );
 
             CREATE TABLE meta (
