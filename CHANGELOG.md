@@ -7,9 +7,43 @@ Format: [Semantic Versioning](https://semver.org). Entries grouped by type:
 
 ---
 
+## [0.9.0] - 2026-05-08
+
+Major security and layer enhancement release: Data Flow analysis, Taint Tracking, and enhanced Institutional Memory granularity.
+
+### Added
+
+- **Data Flow Edges (`PARAM_PASS`)** — AST indexer now tracks cross-function argument flows for precise taint analysis.
+- **Taint Tracking in `fog_trace`** — Introduced `taint_mode` to automate execution path analysis from semantic sources to sinks.
+- **Security Tags (`fog_overlay`)** — Trust Zone Tagging tool to dynamically apply `source`, `sink`, and `sanitizer` tags to symbols.
+- **SAST Export (`fog_export`)** — Generates scoped JSON boundary maps to direct external security scanners based on taint findings.
+- **`fog_bootstrap`** — Project initializer tool to configure domains and seed security manifests.
+- **Layer 4 Granularity** — `fog_decisions` now supports `function`, `file`, and `domain` level scopes with `file_path` and `line_range` precision.
+- **Layer 3 Rule Types** — Constraints now support strict structural rule types (`forbidden_edge`, `tag_required`) in addition to standard `prose`.
+- **Constraint Checker Engine** — Validates call graphs against L3 strict rule definitions to detect architecture violations.
+- **Domain Dependencies** — Computes and tracks dependencies between L2 business domains.
+- **Knowledge Score Metric** — `fog_brief` now includes an L4 decision coverage metric (requires in-degree ≥ 3) and domain drift detection.
+
+### Changed
+
+- **`fog_gaps`** — Upgraded `find_cycles` algorithm to use Tarjan's Strongly Connected Components (SCC) for complete cycle detection.
+- **`fog_gaps`** — Renamed `find_orphans` to `find_dead_code` for clarity (retained backward compatibility alias).
+- **`fog_inspect`** — Redesigned Layer 3 constraint output into a Markdown Table featuring visual rule type icons (🚫, ✅, 📝, 💡).
+- **`fog_brief`** — Removed Layer 5 from global knowledge score; reclassified scratchpad as Agent Runtime.
+- **Documentation** — Clarified boundaries between L3 (global rules) and L4 (specific execution decisions). Updated `fog_search` to emphasize raw file content scanning.
+
+### Fixed
+
+- **Path Traversal Protection** — Applied `canonicalize` and `starts_with` validation to `fog_outline` and `fog_search` to prevent symlink and `../` sandbox escapes.
+- **Wildcard Injection (BUG-006)** — Replaced `LIKE` operator with SQLite `json_each()` for strictly accurate decision function matching.
+- **Decision Validation** — Tightened validation logic in `fog_decisions` to require strict count parity with indexed symbols.
+- **Missing Aliases** — Restored missing `find_orphans` alias to prevent API breakage for older agents.
+
+---
+
 ## [0.8.1] - 2026-04-29
 
-Patch release: UX/DX hardening across `fog_brief`, `fog_scan`, and documentation (Sprint 6).
+Patch release: UX/DX hardening across `fog_brief`, `fog_scan`, and documentation.
 
 ### Fixed
 
