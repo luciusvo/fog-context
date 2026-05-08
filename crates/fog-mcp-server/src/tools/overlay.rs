@@ -51,7 +51,7 @@ pub fn handle(_args: &Value, db: &MemoryDb, project_root: &Path) -> ToolCallResu
 
     if !security_path.exists() && !labels_path.exists() {
         return ToolCallResult::ok(
-            "⚠️ Configuration not found. You can generate default overlays by running `fog_bootstrap` or create `.fog-context/security.toml` manually.",
+            "Configuration not found. You can generate default overlays by running `fog_bootstrap` or create `.fog-context/security.toml` manually.",
         );
     }
 

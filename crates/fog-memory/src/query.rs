@@ -33,13 +33,6 @@ pub struct SearchHit {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TagRef {
-    pub tag_type: String,
-    pub tag_value: String,
-    pub source: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SymbolContext {
     pub name: String,
     pub kind: String,
@@ -47,7 +40,6 @@ pub struct SymbolContext {
     pub start_line: i64,
     pub signature: Option<String>,
     pub doc: Option<String>,
-    pub tags: Vec<TagRef>,
     pub callers: Vec<EdgeRef>,
     pub callees: Vec<EdgeRef>,
     pub decisions: Vec<DecisionRef>,
@@ -70,9 +62,6 @@ pub struct DecisionRef {
     pub revert_risk: String,
     pub status: String,
     pub created_at: String,
-    pub file_path: Option<String>,
-    pub line_range: Option<String>,
-    pub granularity: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,7 +69,6 @@ pub struct ConstraintRef {
     pub code: String,
     pub severity: String,
     pub statement: String,
-    pub rule_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -306,19 +294,31 @@ impl MemoryDb {
             None => return Ok(None),
         };
 
-        let tags = self.fetch_symbol_tags(&sym_name)?;
-
         // 2. Callers (who calls this symbol)
         let callers = self.fetch_edge_refs(sym_id, "upstream")?;
         // 3. Callees (what this symbol calls)
         let callees = self.fetch_edge_refs(sym_id, "downstream")?;
 
         // 4. Decisions that mention this symbol
-        let decisions = self.fetch_symbol_decisions(&sym_name, Some(&sym_file))?;
+        let mut decisions_stmt = conn.prepare(
+            "SELECT id, reason, revert_risk, status, created_at FROM decisions
+             WHERE functions LIKE ?1 ORDER BY created_at DESC LIMIT 10",
+        ).map_err(crate::MemoryError::Database)?;
+        let decisions = decisions_stmt.query_map(
+            rusqlite::params![format!("%\"{name}\"%")],
+            |row| Ok(DecisionRef {
+                id: row.get(0)?,
+                reason: row.get(1)?,
+                revert_risk: row.get(2)?,
+                status: row.get(3)?,
+                created_at: row.get(4)?,
+            }),
+        ).map_err(crate::MemoryError::Database)?
+        .flatten().collect();
 
         // 5. Constraints from domains this symbol belongs to
         let mut constraints_stmt = conn.prepare(
-            "SELECT DISTINCT c.code, c.severity, c.statement, c.rule_type
+            "SELECT DISTINCT c.code, c.severity, c.statement
              FROM constraints c
              JOIN domain_symbols ds ON ds.domain_id = c.domain_id
              WHERE ds.symbol_id = ?1 OR ds.symbol_name = ?2",
@@ -329,7 +329,6 @@ impl MemoryDb {
                 code: row.get(0)?,
                 severity: row.get(1)?,
                 statement: row.get(2)?,
-                rule_type: row.get(3)?,
             }),
         ).map_err(crate::MemoryError::Database)?
         .flatten().collect();
@@ -341,7 +340,6 @@ impl MemoryDb {
             start_line,
             signature,
             doc,
-            tags,
             callers,
             callees,
             decisions,
@@ -397,53 +395,50 @@ impl MemoryDb {
              ORDER BY s.id LIMIT 1"
         };
 
+        let file_glob = file_hint.map(|f| format!("%{f}%")).unwrap_or_default();
+        let file_val = file_hint.unwrap_or("");
+
         let symbol: Option<(i64, String, String, String, i64, Option<String>, Option<String>)> =
-            if let Some(hint) = file_hint {
-                let file_glob = format!("%{hint}%");
-                conn.query_row(
-                    sql,
-                    rusqlite::params![name, hint, file_glob],
-                    |row| Ok((
-                        row.get::<_, i64>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, String>(2)?,
-                        row.get::<_, String>(3)?,
-                        row.get::<_, i64>(4)?,
-                        row.get::<_, Option<String>>(5)?,
-                        row.get::<_, Option<String>>(6)?,
-                    ))
-                ).optional().map_err(crate::MemoryError::Database)?
-            } else {
-                conn.query_row(
-                    sql,
-                    rusqlite::params![name],
-                    |row| Ok((
-                        row.get::<_, i64>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, String>(2)?,
-                        row.get::<_, String>(3)?,
-                        row.get::<_, i64>(4)?,
-                        row.get::<_, Option<String>>(5)?,
-                        row.get::<_, Option<String>>(6)?,
-                    ))
-                ).optional().map_err(crate::MemoryError::Database)?
-            };
+            conn.query_row(
+                sql,
+                rusqlite::params![name, file_val, file_glob],
+                |row| Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                )),
+            ).optional().map_err(crate::MemoryError::Database)?;
 
         let (sym_id, sym_name, sym_kind, sym_file, start_line, signature, doc) = match symbol {
             Some(s) => s,
             None => return Ok(None),
         };
 
-        let tags = self.fetch_symbol_tags(&sym_name)?;
-        
         let callers = self.fetch_edge_refs(sym_id, "upstream")?;
         let callees = self.fetch_edge_refs(sym_id, "downstream")?;
 
-        let decisions = self.fetch_symbol_decisions(&sym_name, Some(&sym_file))?;
+        let mut decisions_stmt = conn.prepare(
+            "SELECT id, reason, revert_risk, status, created_at FROM decisions
+             WHERE functions LIKE ?1 ORDER BY created_at DESC LIMIT 10",
+        ).map_err(crate::MemoryError::Database)?;
+        let decisions = decisions_stmt.query_map(
+            rusqlite::params![format!("%\"{name}\"%")],
+            |row| Ok(DecisionRef {
+                id: row.get(0)?,
+                reason: row.get(1)?,
+                revert_risk: row.get(2)?,
+                status: row.get(3)?,
+                created_at: row.get(4)?,
+            }),
+        ).map_err(crate::MemoryError::Database)?.flatten().collect();
 
         // Constraints + HINT_ entries from Layer 3
         let mut constraints_stmt = conn.prepare(
-            "SELECT DISTINCT c.code, c.severity, c.statement, c.rule_type
+            "SELECT DISTINCT c.code, c.severity, c.statement
              FROM constraints c
              LEFT JOIN domain_symbols ds ON ds.domain_id = c.domain_id
              WHERE ds.symbol_id = ?1 OR ds.symbol_name = ?2
@@ -456,7 +451,6 @@ impl MemoryDb {
                 code: row.get(0)?,
                 severity: row.get(1)?,
                 statement: row.get(2)?,
-                rule_type: row.get(3)?,
             }),
         ).map_err(crate::MemoryError::Database)?.flatten().collect();
 
@@ -467,75 +461,11 @@ impl MemoryDb {
             start_line,
             signature,
             doc,
-            tags,
             callers,
             callees,
             decisions,
             constraints,
         }))
-    }
-
-    fn fetch_symbol_tags(&self, name: &str) -> MemoryResult<Vec<TagRef>> {
-        let conn = self.conn();
-        let mut stmt = conn.prepare(
-            "SELECT tag_type, tag_value, source FROM symbol_tags WHERE symbol_name = ?1 ORDER BY tag_type LIMIT 50",
-        ).map_err(crate::MemoryError::Database)?;
-        let tags = stmt.query_map(rusqlite::params![name], |row| {
-            Ok(TagRef {
-                tag_type: row.get(0)?,
-                tag_value: row.get(1)?,
-                source: row.get(2)?,
-            })
-        }).map_err(crate::MemoryError::Database)?.flatten().collect();
-        Ok(tags)
-    }
-
-    fn fetch_symbol_decisions(&self, name: &str, sym_file: Option<&str>) -> MemoryResult<Vec<DecisionRef>> {
-        let conn = self.conn();
-        
-        let mut query_sql = if self.verify_json1() {
-            "SELECT id, reason, revert_risk, status, created_at, file_path, line_range, granularity FROM decisions
-             WHERE EXISTS (SELECT 1 FROM json_each(functions) WHERE value = ?1)".to_string()
-        } else {
-            "SELECT id, reason, revert_risk, status, created_at, file_path, line_range, granularity FROM decisions
-             WHERE functions LIKE ?1 ESCAPE '\\'".to_string()
-        };
-
-        if sym_file.is_some() {
-            query_sql.push_str(" OR (granularity = 'line' AND file_path = ?2)");
-        }
-        query_sql.push_str(" ORDER BY created_at DESC LIMIT 10");
-
-        let param = if self.verify_json1() {
-            name.to_string()
-        } else {
-            let escaped = name.replace('%', "\\%").replace('_', "\\_");
-            format!("%\"{}\"%", escaped)
-        };
-
-        let mut stmt = conn.prepare(&query_sql).map_err(crate::MemoryError::Database)?;
-        
-        let mapper = |row: &rusqlite::Row| {
-            Ok(DecisionRef {
-                id: row.get(0)?,
-                reason: row.get(1)?,
-                revert_risk: row.get(2)?,
-                status: row.get(3)?,
-                created_at: row.get(4)?,
-                file_path: row.get(5)?,
-                line_range: row.get(6)?,
-                granularity: row.get(7)?,
-            })
-        };
-
-        let decisions = if let Some(sf) = sym_file {
-            stmt.query_map(rusqlite::params![param, sf], mapper)
-                .map_err(crate::MemoryError::Database)?.flatten().collect()
-        } else {
-            stmt.query_map(rusqlite::params![param], mapper)
-                .map_err(crate::MemoryError::Database)?.flatten().collect()
-        };
-        Ok(decisions)
     }
 
     fn fetch_edge_refs(&self, sym_id: i64, direction: &str) -> MemoryResult<Vec<EdgeRef>> {
@@ -732,14 +662,14 @@ impl MemoryDb {
                     FROM edges e
                     JOIN symbols s ON s.id = e.target_id
                     JOIN files f ON f.id = s.file_id
-                    WHERE e.source_id = ?1 AND e.kind IN ('CALLS')
+                    WHERE e.source_id = ?1
                     UNION
                     SELECT s.id, s.name, s.kind, f.path, e.kind, ct.depth + 1
                     FROM call_tree ct
                     JOIN edges e ON e.source_id = ct.id
                     JOIN symbols s ON s.id = e.target_id
                     JOIN files f ON f.id = s.file_id
-                    WHERE ct.depth < ?2 AND e.kind IN ('CALLS')
+                    WHERE ct.depth < ?2
                 )
                 SELECT DISTINCT depth, name, kind, path, edge_kind FROM call_tree ORDER BY depth, name",
             )
@@ -750,14 +680,14 @@ impl MemoryDb {
                     FROM edges e
                     JOIN symbols s ON s.id = e.source_id
                     JOIN files f ON f.id = s.file_id
-                    WHERE e.target_id = ?1 AND e.kind IN ('CALLS')
+                    WHERE e.target_id = ?1
                     UNION
                     SELECT s.id, s.name, s.kind, f.path, e.kind, ct.depth + 1
                     FROM call_tree ct
                     JOIN edges e ON e.target_id = ct.id
                     JOIN symbols s ON s.id = e.source_id
                     JOIN files f ON f.id = s.file_id
-                    WHERE ct.depth < ?2 AND e.kind IN ('CALLS')
+                    WHERE ct.depth < ?2
                 )
                 SELECT DISTINCT depth, name, kind, path, edge_kind FROM call_tree ORDER BY depth, name",
             )
@@ -793,127 +723,6 @@ impl MemoryDb {
             truncated,
             tokens_estimated: tokens_used,
         })
-    }
-
-    // ---------------------------------------------------------------------------
-    // Taint Analysis Trace (BFS)
-    // ---------------------------------------------------------------------------
-
-    pub fn taint_trace(&self, entry: &str, depth: u32) -> Result<String, String> {
-        let conn = self.conn();
-        let sym_id: Option<i64> = conn.query_row(
-            "SELECT id FROM symbols WHERE name = ?1 ORDER BY (end_line - start_line) ASC LIMIT 1",
-            rusqlite::params![entry],
-            |r| r.get(0),
-        ).ok();
-
-        let sym_id = match sym_id {
-            Some(id) => id,
-            None => return Err(format!("Entry symbol '{}' not found in database.", entry)),
-        };
-
-        // Pre-condition 1: Check if there are any sink tags
-        let has_sinks = conn.query_row(
-            "SELECT COUNT(*) FROM symbol_tags WHERE tag_type = 'sink'",
-            [],
-            |r| r.get::<_, i64>(0),
-        ).unwrap_or(0) > 0;
-
-        if !has_sinks {
-            return Ok("⚠️ No sink tags found. Run `fog_overlay` first to apply security.toml configuration.".to_string());
-        }
-
-        // Pre-condition 2: Check if the entry point is a tagged 'source'
-        let is_source = conn.query_row(
-            "SELECT COUNT(*) FROM symbol_tags WHERE symbol_name = ?1 AND tag_type = 'source'",
-            rusqlite::params![entry],
-            |r| r.get::<_, i64>(0),
-        ).unwrap_or(0) > 0;
-
-        let mut out = String::new();
-        if !is_source {
-            out.push_str(&format!("⚠️ '{}' is not tagged as a 'source'. Taint trace may be incomplete or invalid.\n\n", entry));
-        }
-
-        // Queue: (node_id, path_names, sanitized)
-        let mut queue = std::collections::VecDeque::new();
-        queue.push_back((sym_id, vec![entry.to_string()], false));
-
-        let mut visited: std::collections::HashSet<(i64, bool)> = std::collections::HashSet::new();
-        let mut safe_paths = Vec::new();
-        let mut vuln_paths = Vec::new();
-
-        // Prepare statements outside loop
-        let mut get_edges = conn.prepare("SELECT target_id, kind FROM edges WHERE source_id = ?1 AND kind IN ('CALLS', 'PARAM_PASS')").map_err(|e| e.to_string())?;
-        let mut get_tags = conn.prepare("SELECT tag_type, tag_value FROM symbol_tags WHERE symbol_name = (SELECT name FROM symbols WHERE id = ?1)").map_err(|e| e.to_string())?;
-        let mut get_name = conn.prepare("SELECT name FROM symbols WHERE id = ?1").map_err(|e| e.to_string())?;
-
-        while let Some((curr_id, path, sanitized)) = queue.pop_front() {
-            if path.len() > depth as usize + 1 {
-                continue;
-            }
-
-            if !visited.insert((curr_id, sanitized)) {
-                continue;
-            }
-
-            let mut is_sanitizer = false;
-            let mut is_sink = false;
-
-            if let Ok(mut rows) = get_tags.query(rusqlite::params![curr_id]) {
-                while let Ok(Some(row)) = rows.next() {
-                    let tag_type: String = row.get(0).unwrap_or_default();
-                    if tag_type == "sanitizer" {
-                        is_sanitizer = true;
-                    } else if tag_type == "sink" {
-                        is_sink = true;
-                    }
-                }
-            }
-
-            let current_sanitized = sanitized || is_sanitizer;
-
-            if is_sink {
-                if current_sanitized {
-                    safe_paths.push(path);
-                } else {
-                    vuln_paths.push(path);
-                }
-                continue; // Do not expand sinks further
-            }
-
-            // Expand
-            if let Ok(mut rows) = get_edges.query(rusqlite::params![curr_id]) {
-                while let Ok(Some(row)) = rows.next() {
-                    let target_id: i64 = row.get(0).unwrap_or_default();
-                    if let Ok(target_name) = get_name.query_row(rusqlite::params![target_id], |r| r.get::<_, String>(0)) {
-                        let mut next_path = path.clone();
-                        next_path.push(target_name);
-                        queue.push_back((target_id, next_path, current_sanitized));
-                    }
-                }
-            }
-        }
-
-        out.push_str("### ❌ Vulnerable Paths\n");
-        if vuln_paths.is_empty() {
-            out.push_str("*No vulnerable paths found.*\n");
-        } else {
-            for p in vuln_paths {
-                out.push_str(&format!("- {}\n", p.join(" ➔ ")));
-            }
-        }
-
-        out.push_str("\n### ✅ Safe Paths\n");
-        if safe_paths.is_empty() {
-            out.push_str("*No safe paths found.*\n");
-        } else {
-            for p in safe_paths {
-                out.push_str(&format!("- {}\n", p.join(" ➔ ")));
-            }
-        }
-
-        Ok(out)
     }
 
     // ---------------------------------------------------------------------------
@@ -980,20 +789,21 @@ impl MemoryDb {
             |row| row.get(0),
         ).unwrap_or_else(|_| "unknown".to_string());
 
-        // Layer 2-4 score: 0-75
+        // Layer 2-5 score: 0-100
         // Layer 1 (symbols) = baseline (always populated after indexing)
         // Layer 2 (domains): +25 if > 0
         // Layer 3 (constraints): +25 if > 0
         // Layer 4 (decisions): +25 if > 0
-        // Layer 5 (scratchpad): Reclassified as Agent Runtime, not part of Knowledge Graph score.
+        // Layer 5 (scratchpad): checked separately
         let l2 = if total_domains > 0 { 25u8 } else { 0 };
         let l3 = if total_constraints > 0 { 25u8 } else { 0 };
         let l4 = if total_decisions > 0 { 25u8 } else { 0 };
-        let layer_score = l2 + l3 + l4;
+        let l5: u8 = if count("SELECT COUNT(*) FROM scratchpad") > 0 { 25 } else { 0 };
+        let layer_score = l2 + l3 + l4 + l5;
 
-        let hint = if layer_score < 75 {
+        let hint = if layer_score < 50 {
             Some(format!(
-                "Knowledge score: {layer_score}/75. Use fog_assign (L2), fog_constraints (L3), fog_decisions (L4) to improve.",
+                "Knowledge score: {layer_score}/100. Run define_domain, record_decision, and ingest_adrs to improve.",
             ))
         } else {
             None
@@ -1163,7 +973,7 @@ impl MemoryDb {
 
         // Get constraints
         let mut con_stmt = conn.prepare(
-            "SELECT c.code, c.severity, c.statement, c.rule_type
+            "SELECT c.code, c.severity, c.statement
              FROM domain_constraints dc
              JOIN constraints c ON c.id = dc.constraint_id
              WHERE dc.domain_id = ?1",
@@ -1174,13 +984,12 @@ impl MemoryDb {
                 code: row.get(0)?,
                 severity: row.get(1)?,
                 statement: row.get(2)?,
-                rule_type: row.get(3)?,
             }),
         ).map_err(crate::MemoryError::Database)?.flatten().collect();
 
         // Get decisions
         let mut dec_stmt = conn.prepare(
-            "SELECT d.id, d.reason, d.revert_risk, d.status, d.created_at, d.file_path, d.line_range, d.granularity
+            "SELECT d.id, d.reason, d.revert_risk, d.status, d.created_at
              FROM decisions d
              WHERE d.domain = ?1
              ORDER BY d.created_at DESC
@@ -1194,9 +1003,6 @@ impl MemoryDb {
                 revert_risk: row.get(2)?,
                 status: row.get(3)?,
                 created_at: row.get(4)?,
-                file_path: row.get(5)?,
-                line_range: row.get(6)?,
-                granularity: row.get(7)?,
             }),
         ).map_err(crate::MemoryError::Database)?.flatten().collect();
 

@@ -76,22 +76,6 @@ pub fn handle(args: &Value, db: &MemoryDb, project_root: &Path) -> ToolCallResul
             if let Some(sig) = &ctx.signature {
                 lines.push(format!("\n```\n{sig}\n```"));
             }
-            if !ctx.tags.is_empty() {
-                lines.push("\n## 🏷️ Security Tags".to_string());
-                lines.push("| Tag | Type | Source |".to_string());
-                lines.push("|---|---|---|".to_string());
-                for tag in &ctx.tags {
-                    let icon = match tag.tag_type.as_str() {
-                        "sink" => "🔴 SINK",
-                        "source" => "🟢 SOURCE",
-                        "sanitizer" => "🛡️ SANITIZER",
-                        "pii" => "🟡 PII",
-                        "credentials" => "🔑 CREDENTIALS",
-                        _ => "🏷️ TAG",
-                    };
-                    lines.push(format!("| `{}` | {} | `{}` |", tag.tag_value, icon, tag.source));
-                }
-            }
             if !ctx.callers.is_empty() {
                 lines.push(format!("\n## Callers ({} upstream)", ctx.callers.len()));
                 for c in &ctx.callers {
@@ -105,25 +89,16 @@ pub fn handle(args: &Value, db: &MemoryDb, project_root: &Path) -> ToolCallResul
                 }
             }
             if !ctx.decisions.is_empty() {
-                lines.push("## 🧠 Institutional Memory (L4)".to_string());
+                lines.push("\n## Decision History".to_string());
                 for d in &ctx.decisions {
-                    let gran = d.granularity.as_deref().unwrap_or("function");
-                    let status_tag = if d.status == "seed" { " [seed]" } else { "" };
-                    lines.push(format!("- [{}] [{}]{} {} (risk: {})", d.created_at, gran, status_tag, d.reason, d.revert_risk));
+                    lines.push(format!("- [{}] {} (risk: {})", d.created_at, d.reason, d.revert_risk));
                 }
             }
             if !ctx.constraints.is_empty() {
                 lines.push("\n## Constraints & Hints".to_string());
-                lines.push("| Code | Type | Severity | Rule |".to_string());
-                lines.push("|---|---|---|---|".to_string());
                 for c in &ctx.constraints {
-                    let type_icon = match c.rule_type.as_deref().unwrap_or("prose") {
-                        "forbidden_edge" => "🚫",
-                        "tag_required" => "✅",
-                        _ if c.code.starts_with("HINT_") => "💡",
-                        _ => "📝",
-                    };
-                    lines.push(format!("| `{}` | {} | {} | {} |", c.code, type_icon, c.severity, c.statement));
+                    let prefix = if c.code.starts_with("HINT_") { "💡" } else { "🔒" };
+                    lines.push(format!("- {} **{}** [{}]: {}", prefix, c.code, c.severity, c.statement));
                 }
             }
             let body = lines.join("\n");

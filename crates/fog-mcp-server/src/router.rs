@@ -39,7 +39,6 @@ pub fn list_tools() -> Vec<ToolDef> {
         tools::import::definition(),
         tools::overlay::definition(),
         tools::bootstrap::definition(),
-        tools::export::definition(),
     ]
 }
 
@@ -82,7 +81,6 @@ pub fn dispatch(
         "fog_decisions"       => tools::decisions::handle(args, &db_guard, project_root),
         "fog_overlay"         => tools::overlay::handle(args, &db_guard, project_root),
         "fog_bootstrap"       => tools::bootstrap::handle(args, &db_guard, project_root),
-        "fog_export"          => tools::export::handle(args, &db_guard, project_root),
         _ => ToolCallResult::err(format!(
             "Unknown tool: '{tool_name}'. Available: {}",
             list_tools().iter().map(|t| t.name).collect::<Vec<_>>().join(", ")

@@ -1,4 +1,5 @@
 //! fog_lookup - symbol search via BM25 FTS5 + centrality ranking.
+//! Replaces: search
 
 use fog_memory::MemoryDb;
 use serde_json::{json, Value};

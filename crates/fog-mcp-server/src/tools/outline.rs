@@ -33,21 +33,8 @@ pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> To
         _ => return ToolCallResult::err("fog_outline: 'path' is required"),
     };
 
-    let joined = project_root.join(path);
-    let canonical = match joined.canonicalize() {
-        Ok(c) => c,
-        Err(_) => joined.clone(), // Fallback for fuzzy paths that don't exist exactly
-    };
-    let canonical_root = project_root.canonicalize().unwrap_or_else(|_| project_root.to_path_buf());
-    
-    // Explicitly verify the canonicalized (resolved) path starts with the workspace root
-    // This prevents symlinks pointing outside from bypassing the check
-    if !canonical.starts_with(&canonical_root) {
-        return ToolCallResult::err("Path must be inside project root".to_string());
-    }
-
     // E5: Root path gives 0 results - explain clearly instead of misleading "not indexed" error
-    let is_root = canonical == canonical_root;
+    let is_root = matches!(path, "." | "./" | "/" | "");
     if is_root {
         return ToolCallResult::ok(
             "⚠️  fog_outline does not support root directory - it would return too many symbols.\n\

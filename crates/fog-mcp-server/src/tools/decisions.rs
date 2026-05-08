@@ -21,9 +21,6 @@ pub fn definition() -> ToolDef {
                 "reason": { "type": "string", "description": "Why this change was made." },
                 "domain": { "type": "string", "description": "Business domain (optional)." },
                 "revert_risk": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"], "default": "LOW" },
-                "file_path": { "type": "string", "description": "File path (optional)." },
-                "line_range": { "type": "string", "description": "Line range (optional)." },
-                "granularity": { "type": "string", "enum": ["function", "file", "domain"], "default": "function" },
                 "project": { "type": "string" }
             },
             "required": ["functions", "reason"]
@@ -86,16 +83,11 @@ pub fn handle(args: &Value, db: &MemoryDb, project_root: &Path) -> ToolCallResul
     // ─────────────────────────────────────────────────────────────────────────
 
     let decision_args = RecordDecisionArgs {
-        functions: args.get("functions").and_then(Value::as_array)
-            .map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect())
-            .unwrap_or_default(),
-        reason: args.get("reason").and_then(Value::as_str).unwrap_or("").to_string(),
-        domain: args.get("domain").and_then(Value::as_str).map(String::from),
-        revert_risk: args.get("revert_risk").and_then(Value::as_str).map(String::from),
-        file_path: args["file_path"].as_str().map(String::from),
-        line_range: args["line_range"].as_str().map(String::from),
-        granularity: args["granularity"].as_str().map(String::from),
-        ..Default::default()
+        functions: functions.clone(),
+        reason: reason.to_string(),
+        domain: args["domain"].as_str().map(String::from),
+        revert_risk: args["revert_risk"].as_str().map(String::from),
+        supersedes_id: None,
     };
 
     match db.record_decision(decision_args) {

@@ -10,9 +10,9 @@ pub use crate::protocol::ToolDef;
 pub fn definition() -> ToolDef {
     ToolDef {
         name: "fog_constraints",
-        description: "Scan ADR files and YAML rule files to populate the constraints database (Layer 3 - Global Architecture Rules). \
+        description: "Scan ADR files and YAML rule files to populate the constraints database (Layer 3). \
             Also supports inline injection: pass 'code' + 'statement' to add a constraint directly \
-            without needing an ADR file. Use this for project-wide invariants, NOT for logging specific function changes (use fog_decisions/Layer 4 for that).",
+            without needing an ADR file. Supports markdown tables, YAML schemas, and INVARIANTS comment blocks.",
         input_schema: json!({
             "type": "object",
             "properties": {
@@ -60,8 +60,7 @@ pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> To
                  - **Code:** `{code}`\n\
                  - **Severity:** {severity}\n\
                  - **Rule:** {statement}\n\n\
-                 Verify with fog_brief({{}}) → check Constraints (L3) count.\n\n\
-                 > ⚠️ IMPORTANT: Inline constraints are MEMORY-ONLY. To persist them permanently, create an ADR file or use the fog_adr_writer skill."
+                 Verify with fog_brief({{}}) → check Constraints (L3) count."
             )),
             Err(e) => ToolCallResult::err(format!("fog_constraints (inline) error: {e}")),
         };
@@ -298,7 +297,6 @@ fn handle_raw_text_file(path: &std::path::Path, db: &MemoryDb) -> ToolCallResult
     ToolCallResult::ok(format!(
         "✅ **Raw text ingested:** {}\n\
          - **Imported:** {imported} constraints into Layer 3\n\
-         - **Note:** All constraint codes are stored UPPERCASE (e.g., `hint_foo` → `HINT_FOO`)\n\
          - **Tip:** Use `HINT_NAME: description` lines to record semantic bridges\
          {warn}",
         path.display()

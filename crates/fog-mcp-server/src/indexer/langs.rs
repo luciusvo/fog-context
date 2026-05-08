@@ -55,7 +55,6 @@ pub struct LangConfig {
     /// edge_kind string to use for all edges produced by bridge_query.
     /// e.g. "DI_INJECT", "IMPLEMENTS", "DYNAMIC_IMPORT"
     pub bridge_edge_kind: &'static str,
-    pub call_args_query: Option<&'static str>,
 }
 
 /// Map a file extension to a canonical language name.
@@ -108,7 +107,6 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             kinds: RUST_KINDS,
             bridge_query: None, // Rust: #[derive] handled via call_query macro captures
             bridge_edge_kind: "CALLS",
-            call_args_query: Some(RUST_CALL_ARGS_QUERY),
         }),
         "typescript" => Some(LangConfig {
             name: "typescript",
@@ -118,7 +116,6 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             kinds: TS_KINDS,
             bridge_query: Some(TS_BRIDGE_QUERY),
             bridge_edge_kind: "DYNAMIC_IMPORT",
-            call_args_query: None,
         }),
         "tsx" => Some(LangConfig {
             name: "tsx",
@@ -128,7 +125,6 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             kinds: TSX_KINDS,
             bridge_query: Some(TS_BRIDGE_QUERY),
             bridge_edge_kind: "DYNAMIC_IMPORT",
-            call_args_query: None,
         }),
         "python" => Some(LangConfig {
             name: "python",
@@ -138,7 +134,6 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             kinds: PY_KINDS,
             bridge_query: Some(PY_BRIDGE_QUERY),
             bridge_edge_kind: "DECORATES",
-            call_args_query: None,
         }),
         "go" => Some(LangConfig {
             name: "go",
@@ -148,7 +143,6 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             kinds: GO_KINDS,
             bridge_query: Some(GO_BRIDGE_QUERY),
             bridge_edge_kind: "DI_INJECT",
-            call_args_query: None,
         }),
         "c" => Some(LangConfig {
             name: "c",
@@ -158,7 +152,6 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             kinds: C_KINDS,
             bridge_query: None, // C macros: handled via hints/c.json
             bridge_edge_kind: "CALLS",
-            call_args_query: None,
         }),
         "cpp" => Some(LangConfig {
             name: "cpp",
@@ -168,7 +161,6 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             kinds: CPP_KINDS,
             bridge_query: None,
             bridge_edge_kind: "CALLS",
-            call_args_query: None,
         }),
         "java" => Some(LangConfig {
             name: "java",
@@ -178,7 +170,6 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             kinds: JAVA_KINDS,
             bridge_query: Some(JAVA_BRIDGE_QUERY),
             bridge_edge_kind: "DI_INJECT",
-            call_args_query: None,
         }),
         "csharp" => Some(LangConfig {
             name: "csharp",
@@ -188,7 +179,6 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             kinds: CS_KINDS,
             bridge_query: Some(CS_BRIDGE_QUERY),
             bridge_edge_kind: "DI_INJECT",
-            call_args_query: None,
         }),
         "ruby" => Some(LangConfig {
             name: "ruby",
@@ -198,7 +188,6 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             kinds: RUBY_KINDS,
             bridge_query: Some(RUBY_BRIDGE_QUERY),
             bridge_edge_kind: "FRAMEWORK_LINK",
-            call_args_query: None,
         }),
         "php" => Some(LangConfig {
             name: "php",
@@ -208,7 +197,6 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             kinds: PHP_KINDS,
             bridge_query: Some(PHP_BRIDGE_QUERY),
             bridge_edge_kind: "DI_INJECT",
-            call_args_query: None,
         }),
         #[cfg(feature = "kotlin")]
         "kotlin" => Some(LangConfig {
@@ -219,7 +207,6 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             kinds: KOTLIN_KINDS,
             bridge_query: Some(KOTLIN_BRIDGE_QUERY),
             bridge_edge_kind: "DI_INJECT",
-            call_args_query: None,
         }),
         #[cfg(feature = "swift")]
         "swift" => Some(LangConfig {
@@ -230,7 +217,6 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             kinds: SWIFT_KINDS,
             bridge_query: Some(SWIFT_BRIDGE_QUERY),
             bridge_edge_kind: "FRAMEWORK_LINK",
-            call_args_query: None,
         }),
         #[cfg(feature = "dart")]
         "dart" => Some(LangConfig {
@@ -241,7 +227,6 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             kinds: DART_KINDS,
             bridge_query: Some(DART_BRIDGE_QUERY),
             bridge_edge_kind: "DI_INJECT",
-            call_args_query: None,
         }),
         "lua" => Some(LangConfig {
             name: "lua",
@@ -251,7 +236,6 @@ pub fn config_for(lang: &str) -> Option<LangConfig> {
             kinds: LUA_KINDS,
             bridge_query: None,
             bridge_edge_kind: "CALLS",
-            call_args_query: None,
         }),
         _ => None,
     }
@@ -276,12 +260,6 @@ const RUST_CALL_QUERY: &str = r#"
 (call_expression function: (field_expression field: (field_identifier) @name)) @call
 (call_expression function: (scoped_identifier name: (identifier) @name)) @call
 (macro_invocation macro: (identifier) @name) @call
-"#;
-
-const RUST_CALL_ARGS_QUERY: &str = r#"
-(call_expression
-  function: (_) @name
-  arguments: (arguments (_) @args))
 "#;
 
 // =============================================================================

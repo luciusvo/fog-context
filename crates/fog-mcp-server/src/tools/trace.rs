@@ -19,7 +19,6 @@ pub fn definition() -> ToolDef {
                 "direction": { "type": "string", "enum": ["down", "up"], "default": "down" },
                 "depth": { "type": "integer", "description": "Max depth (1-6, default 4)", "default": 4 },
                 "token_budget": { "type": "integer", "description": "Max tokens for output." },
-                "taint_mode": { "type": "boolean", "default": false, "description": "Enable source-sink-sanitizer taint analysis" },
                 "project": { "type": "string" }
             },
             "required": ["entry"]
@@ -35,16 +34,8 @@ pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> To
     let direction = args["direction"].as_str().unwrap_or("down");
     let depth = args["depth"].as_u64().unwrap_or(4) as u32;
     let token_budget = args["token_budget"].as_u64().map(|b| b as usize);
-    let taint_mode = args["taint_mode"].as_bool().unwrap_or(false);
 
     let stale_warn = crate::stale::quick_check(project_root, "fog_trace");
-
-    if taint_mode {
-        return match db.taint_trace(entry, depth) {
-            Ok(result) => ToolCallResult::ok(format!("{}# Taint Trace: `{}`\n\n{}", stale_warn, entry, result)),
-            Err(e) => ToolCallResult::err(format!("fog_trace error (taint mode): {e}")),
-        };
-    }
 
     match db.route_map(entry, depth, direction, token_budget) {
         Ok(result) => {

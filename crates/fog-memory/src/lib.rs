@@ -29,11 +29,9 @@ pub mod compressor;
 pub mod db;
 pub mod query;
 pub mod write;
-pub mod checker;
 
 pub use db::{MemoryDb, open_shared_db};
 pub use query::DomainDetail;
-pub use checker::Violation;
 
 use std::path::Path;
 use thiserror::Error;
