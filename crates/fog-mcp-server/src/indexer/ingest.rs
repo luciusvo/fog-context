@@ -66,6 +66,7 @@ pub(super) struct Deferred {
     pub(super) source_id: i64,
     pub(super) target_name: String,
     pub(super) edge_kind: &'static str,
+    pub(super) confidence: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -191,11 +192,13 @@ fn run_two_pass_conn(
                             source_id,
                             target_name: resolves_to.clone(),
                             edge_kind: "MACRO_EXPAND",
+                            confidence: None,
                         });
                         all_deferred.push(Deferred {
                             source_id,
                             target_name: pattern.clone(),
                             edge_kind: "MACRO_EXPAND",
+                            confidence: None,
                         });
                     }
                 }
@@ -229,10 +232,11 @@ fn run_two_pass_conn(
             // Dedup key includes edge_kind to allow same symbol pair with different kinds
             let key = format!("{}:{}:{}", d.source_id, tid, d.edge_kind);
             if seen.insert(key) {
+                let conf = d.confidence.as_deref().unwrap_or("name_match");
                 let _ = conn.execute(
                     "INSERT OR IGNORE INTO edges (source_id, target_id, kind, confidence)
-                     VALUES (?1, ?2, ?3, 'name_match')",
-                    rusqlite::params![d.source_id, tid, d.edge_kind],
+                     VALUES (?1, ?2, ?3, ?4)",
+                    rusqlite::params![d.source_id, tid, d.edge_kind, conf],
                 );
                 stats.edges_cross += 1;
             }
@@ -327,10 +331,11 @@ fn parse_file(
             let doc = extract_doc(content, def_n.start_position().row);
             let tokens = tokenize_name(&name);
 
-            conn.execute(
+            conn.prepare_cached(
                 "INSERT INTO symbols
                  (file_id, name, kind, start_line, end_line, signature, doc, name_tokens, centrality)
-                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,0.0)",
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,0.0)"
+            )?.execute(
                 rusqlite::params![file_id, name, kind, start_line, end_line, sig, doc, tokens],
             )?;
             local_ids.insert(name, conn.last_insert_rowid());
@@ -374,15 +379,14 @@ fn parse_file(
 
             if let Some(&target_id) = local_ids.get(&call_name) {
                 if source_id != target_id {
-                    let _ = conn.execute(
+                    let _ = conn.prepare_cached(
                         "INSERT OR IGNORE INTO edges (source_id, target_id, kind, confidence)
-                         VALUES (?1, ?2, 'CALLS', 'exact')",
-                        rusqlite::params![source_id, target_id],
-                    );
+                         VALUES (?1, ?2, 'CALLS', 'exact')"
+                    ).and_then(|mut stmt| stmt.execute(rusqlite::params![source_id, target_id]));
                     stats.edges_intra += 1;
                 }
             } else {
-                deferred.push(Deferred { source_id, target_name: call_name, edge_kind: "CALLS" });
+                deferred.push(Deferred { source_id, target_name: call_name, edge_kind: "CALLS", confidence: None });
             }
         }
     }
@@ -437,7 +441,60 @@ fn parse_file(
                     source_id,
                     target_name,
                     edge_kind: cfg.bridge_edge_kind,
+                    confidence: None,
                 });
+            }
+        }
+    }
+
+    // ── Data Flow Query: extracting call arguments (PARAM_PASS) ────────────────
+    if let Some(args_src) = cfg.call_args_query {
+        if let Ok(args_q) = Query::new(&cfg.ts_language, args_src) {
+            let name_idx = args_q.capture_names().iter()
+                .position(|n| *n == "name").map(|i| i as u32);
+            let args_idx = args_q.capture_names().iter()
+                .position(|n| *n == "args").map(|i| i as u32);
+
+            let mut cursor4 = QueryCursor::new();
+            let mut matches4 = cursor4.matches(&args_q, root, src);
+            while let Some(m) = matches4.next() {
+                let Some(name_cap_i) = name_idx else { continue };
+                let Some(args_cap_i) = args_idx else { continue };
+
+                let Some(name_cap) = m.captures.iter().find(|c| c.index == name_cap_i) else { continue };
+                let Some(args_cap) = m.captures.iter().find(|c| c.index == args_cap_i) else { continue };
+
+                let target_name = match name_cap.node.utf8_text(src) {
+                    Ok(s) if !s.is_empty() => s.to_string(),
+                    _ => continue,
+                };
+                if is_noise(&target_name) { continue; }
+
+                let arg_text = match args_cap.node.utf8_text(src) {
+                    Ok(s) if !s.is_empty() => s.to_string(),
+                    _ => continue,
+                };
+
+                let call_row = name_cap.node.start_position().row;
+                let source_id = find_enclosing_symbol(conn, file_id, call_row as i64)
+                    .unwrap_or(fallback_source);
+
+                if let Some(&target_id) = local_ids.get(&target_name) {
+                    if source_id != target_id {
+                        let _ = conn.prepare_cached(
+                            "INSERT OR IGNORE INTO edges (source_id, target_id, kind, confidence)
+                             VALUES (?1, ?2, 'PARAM_PASS', ?3)"
+                        ).and_then(|mut stmt| stmt.execute(rusqlite::params![source_id, target_id, arg_text]));
+                        stats.edges_intra += 1;
+                    }
+                } else {
+                    deferred.push(Deferred {
+                        source_id,
+                        target_name,
+                        edge_kind: "PARAM_PASS",
+                        confidence: Some(arg_text),
+                    });
+                }
             }
         }
     }
@@ -451,13 +508,15 @@ fn parse_file(
 
 /// Find the symbol in this file whose range contains the given row.
 fn find_enclosing_symbol(conn: &Connection, file_id: i64, row: i64) -> Option<i64> {
-    conn.query_row(
+    if let Ok(mut stmt) = conn.prepare_cached(
         "SELECT id FROM symbols WHERE file_id = ?1
          AND start_line <= ?2 AND end_line >= ?2
-         ORDER BY (end_line - start_line) ASC LIMIT 1",
-        rusqlite::params![file_id, row + 1],
-        |r| r.get(0),
-    ).ok()
+         ORDER BY (end_line - start_line) ASC LIMIT 1"
+    ) {
+        stmt.query_row(rusqlite::params![file_id, row + 1], |r| r.get(0)).ok()
+    } else {
+        None
+    }
 }
 
 /// Extract doc comment lines immediately above `start_row` (0-indexed).

@@ -18,8 +18,17 @@
 ⚠️ **Anti-Blackbox Rule:** You MUST NOT bypass cross-validation. 
 Even with a detailed prompt, ALWAYS verify real codebase state via `fog_inspect` before modifying code.
 
+### MANDATORY: End-of-Session Context Update
+After completing code changes, update if session introduced:
+- New entry points → `.fog-context/security.toml` [sources]
+- New DB queries or shell calls → `.fog-context/security.toml` [sinks]
+- New validation functions → `.fog-context/security.toml` [sanitizers]
+- New sensitive data models → `.fog-context/labels.toml` [pii]
+After editing configs, run `fog_overlay` to apply to graph.
+
+
 ### 🔴 First-time Setup — MANDATORY Knowledge Layer Bootstrap
-> fog-context indexed Layer 1 (Physical: 14 symbols). Semantic Layers 2-4 are empty — Knowledge Score: 0/100.
+> fog-context indexed Layer 1 (Physical: 804 symbols). Semantic Layers 2-4 are empty — Knowledge Score: 0/100.
 > Complete these steps **once** to unlock full intelligence:
 
 ```

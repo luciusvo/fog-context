@@ -63,7 +63,7 @@ pub fn handle(args: &Value, db: &MemoryDb, project_root: &std::path::Path) -> To
             Ok(domains) => {
                 if domains.is_empty() {
                     return ToolCallResult::ok(format!(
-                        "{stale_warn}No business domains defined yet. Use fog_assign to tag symbols to domains."
+                        "{stale_warn}No business domains defined yet.\n> 💡 No domains yet. Use `fog_assign` to map symbols to business domains."
                     ));
                 }
                 let mut lines = vec![format!("{stale_warn}# Business Domains ({} total)\n", domains.len())];

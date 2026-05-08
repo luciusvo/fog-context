@@ -27,7 +27,7 @@ pub struct SearchArgs {
 pub fn definition() -> ToolDef {
     ToolDef {
         name: "fog_search".into(),
-        description: "Raw text and regex search across the project files (max 20 exact matches or a distribution summary if > 50). Use this when semantic search (fog_lookup) fails to find exact literal strings or specific syntax patterns.".into(),
+        description: "Raw text and regex search scanning actual file contents (not the AST index) across the project (max 20 exact matches or a distribution summary if > 50). Use this when semantic search (fog_lookup) fails to find exact literal strings or specific syntax patterns.".into(),
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {
@@ -64,13 +64,15 @@ struct SearchMatch {
 
 fn run_search(args: SearchArgs, project_root: &Path) -> ToolCallResult {
     // 1. Resolve path and sandbox (Security/Zero-Trust)
+    let canonical_root = project_root.canonicalize().unwrap_or_else(|_| project_root.to_path_buf());
+    
     let search_root = if let Some(p) = &args.path {
         let p_path = Path::new(p);
         let joined = project_root.join(p_path);
         // Canonicalization protects against traversal like ../../etc/shadow
         match joined.canonicalize() {
             Ok(c) => {
-                if !c.starts_with(project_root) {
+                if !c.starts_with(&canonical_root) {
                     return ToolCallResult::err("Path must be inside project root".to_string());
                 }
                 c
