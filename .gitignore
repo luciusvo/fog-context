@@ -16,3 +16,6 @@ fog-mcp-windows-amd64.exe
 # fog-context agentic index (auto-generated)
 .fog-context/
 !.fog-context/hints/
+
+# Architecture decisions (local only)
+/logs/
